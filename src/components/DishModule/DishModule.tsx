@@ -23,6 +23,7 @@ import {
   EFECTOS_FRESCURA 
 } from '../../constants/parameters';
 import { DishParameters } from '../../types';
+import { CHEAPEST } from '../../services/imageOptions';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -68,6 +69,12 @@ const DishModule: React.FC = () => {
     aspectRatio: ASPECT_RATIOS[0].value,
     imageSize: DEFAULT_IMAGE_SIZE,
     quality: DEFAULT_QUALITY,
+    numberOfImages: CHEAPEST.numberOfImages,
+    model: CHEAPEST.model,
+    format: CHEAPEST.format,
+    background: CHEAPEST.background,
+    moderation: CHEAPEST.moderation,
+    customSize: CHEAPEST.customSize,
     efectoVapor: EFECTOS_VAPOR[0].value,
     efectoFrescura: EFECTOS_FRESCURA[0].value,
     props: [],

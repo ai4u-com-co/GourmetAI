@@ -44,7 +44,7 @@ export const metadataToJSON = (metadata: Metadata): string => {
  * @param {Metadata} metadata - Metadata a guardar
  * @param {string} baseFilename - Nombre base del archivo (sin extensión)
  */
-export const downloadImageWithMetadata = async (imageUrl: string, metadata: Metadata, baseFilename: string = 'gourmet-image'): Promise<void> => {
+export const downloadImageWithMetadata = async (imageUrl: string, metadata: Metadata, baseFilename: string = 'gourmet-image', extension: string = 'png'): Promise<void> => {
   try {
     // Descargar imagen usando método mejorado para data URIs
     let imageBlobUrl: string;
@@ -60,7 +60,7 @@ export const downloadImageWithMetadata = async (imageUrl: string, metadata: Meta
     
     const imageLink = document.createElement('a');
     imageLink.href = imageBlobUrl;
-    imageLink.download = `${baseFilename}.png`;
+    imageLink.download = `${baseFilename}.${extension}`;
     imageLink.style.display = 'none';
     document.body.appendChild(imageLink);
     imageLink.click();

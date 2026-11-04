@@ -17,9 +17,14 @@ export interface DishParameters {
   props?: string[];
   saturacion?: string;
   texturaFondo?: string;
-  imageSize?: string;
-  quality?: string; // low | medium | high — define cuántos créditos cuesta la imagen
-  numberOfImages?: number;
+  imageSize?: string; // 1K | 2K | custom (con customSize)
+  quality?: string; // low | medium | high | xhigh | max — define cuántos créditos cuesta la imagen
+  numberOfImages?: number; // variantes del mismo plato (1–4)
+  model?: string; // sunburst (preciso) | flare (rápido)
+  format?: string; // jpeg | webp | png
+  background?: string; // auto | opaque | transparent (recorte)
+  moderation?: string; // auto | low (solo admin)
+  customSize?: string; // "1280x720" cuando imageSize === custom
   cuisineType?: string[];
   dishCategory?: string[];
   cookingTechnique?: string[];

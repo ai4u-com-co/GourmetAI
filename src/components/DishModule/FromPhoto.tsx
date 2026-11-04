@@ -4,6 +4,7 @@ import ImageUploader from '../ImageUploader';
 import ParameterPanel from '../ParameterPanel';
 import { validateParameters } from '../../utils/validation';
 import { DishParameters } from '../../types';
+import { inputPixelsOf } from '../../services/imageOptions';
 
 interface FromPhotoProps {
   parameters: DishParameters;
@@ -19,6 +20,12 @@ const FromPhoto: React.FC<FromPhotoProps> = ({ parameters, onParameterChange, on
   const [selectedRestaurant, setSelectedRestaurant] = useState<string | null>(null);
   const [selectedCutlery, setSelectedCutlery] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Fotos que se enviarán (y se cobran como entrada). En un recorte (fondo transparente) no se usan la mesa ni el restaurante.
+  const cutout = parameters.background === 'transparent';
+  const inputPixels = [selectedImage, selectedPlate, cutout ? null : selectedTable, cutout ? null : selectedRestaurant, selectedCutlery]
+    .filter((x): x is string => !!x)
+    .map((x) => inputPixelsOf(x));
 
   const handleGenerate = async () => {
     setLocalError(null);
@@ -131,6 +138,7 @@ const FromPhoto: React.FC<FromPhotoProps> = ({ parameters, onParameterChange, on
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
           extraCredits={1}
+          inputPixels={inputPixels}
         />
       </Box>
     </Box>

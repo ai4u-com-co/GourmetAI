@@ -1,6 +1,7 @@
 // Utilidades para randomización de parámetros
 
 import { DEFAULT_IMAGE_SIZE, DEFAULT_QUALITY } from '../constants/parameters';
+import { CHEAPEST } from '../services/imageOptions';
 import {
   ESTILOS_PLATO,
   ILUMINACIONES,
@@ -12,7 +13,7 @@ import {
   AMBIENTES,
   MOMENTOS_DIA,
   PROFUNDIDADES_CAMPO,
-  ASPECT_RATIOS,
+
   EFECTOS_VAPOR,
   EFECTOS_FRESCURA,
   DIRECCIONES_LUZ,
@@ -66,7 +67,7 @@ const randomInt = (min: number, max: number): number => {
  * Genera un set completo de parámetros aleatorios
  * @returns {DishParameters} - Objeto con todos los parámetros randomizados
  */
-export const generateRandomParameters = (): DishParameters => {
+export const generateRandomParameters = (): Partial<DishParameters> => {
   return {
     // Control principal
     intensidadGourmet: randomInt(INTENSIDAD_GOURMET_MIN, INTENSIDAD_GOURMET_MAX),
@@ -84,11 +85,9 @@ export const generateRandomParameters = (): DishParameters => {
     direccionLuz: randomFrom(DIRECCIONES_LUZ),
     anguloCamara: randomFrom(ANGULOS_CAMARA),
     profundidadCampo: randomFrom(PROFUNDIDADES_CAMPO),
-    aspectRatio: randomFrom(ASPECT_RATIOS),
-    imageSize: DEFAULT_IMAGE_SIZE,
-    quality: DEFAULT_QUALITY,
-    numberOfImages: 1,
-    
+    // El formato (destino), la calidad, el tamaño y las variantes NO se sortean: afectan el costo y el uso final,
+    // y «Aleatorio» solo debe variar lo creativo (nunca subir lo que cuesta ni cambiar para dónde es la imagen).
+
     // Efectos Especiales
     momentoDelDia: randomFrom(MOMENTOS_DIA),
     efectoVapor: randomFrom(EFECTOS_VAPOR),
@@ -133,7 +132,13 @@ export const getDefaultParameters = (): DishParameters => {
     imageSize: DEFAULT_IMAGE_SIZE,
     quality: DEFAULT_QUALITY,
     numberOfImages: 1,
-    
+    // Reset = todo lo avanzado también vuelve a lo más económico
+    model: CHEAPEST.model,
+    format: CHEAPEST.format,
+    background: CHEAPEST.background,
+    moderation: CHEAPEST.moderation,
+    customSize: CHEAPEST.customSize,
+
     // Efectos Especiales
     momentoDelDia: 'sin-preferencia',
     efectoVapor: 'sin-vapor',

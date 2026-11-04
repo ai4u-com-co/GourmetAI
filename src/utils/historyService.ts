@@ -29,9 +29,17 @@ export const saveToHistory = (generation: Omit<HistoryItem, 'id' | 'timestamp'>)
   if (!owner) return null;
   try {
     const newGeneration: HistoryItem = { id: Date.now().toString(), timestamp: new Date().toISOString(), ...generation };
-    const updated = [newGeneration, ...getHistory()].slice(0, MAX_HISTORY_ITEMS);
-    localStorage.setItem(keyFor(owner), JSON.stringify(updated));
-    return newGeneration;
+    let updated = [newGeneration, ...getHistory()].slice(0, MAX_HISTORY_ITEMS);
+    // Con varias variantes y formatos grandes el navegador (≈5 MB) se llena rápido: se descartan las entradas más viejas hasta que quepa.
+    for (;;) {
+      try {
+        localStorage.setItem(keyFor(owner), JSON.stringify(updated));
+        return newGeneration;
+      } catch (quotaError) {
+        if (updated.length <= 1) throw quotaError;
+        updated = updated.slice(0, -1);
+      }
+    }
   } catch (error) {
     console.error('Error guardando en historial:', error);
     return null;

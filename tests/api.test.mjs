@@ -17,7 +17,8 @@ const reset = (over = {}) => {
     consume: { ok: true, remaining: 9, log_id: 42, refund_token: TOKEN_SECRETO },
     consumeError: null,
     refund: { ok: true, remaining: 10 },
-    membership: { is_active: true },
+    membership: { is_active: true, role: 'user' },
+    recordFail: false,
     openai: [{ status: 200, body: { data: [{ b64_json: 'QUJD' }] } }],
     chat: { status: 200, body: { choices: [{ message: { content: 'harina, huevos' } }] } },
     ...over,
@@ -32,6 +33,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.includes('/auth/v1/user')) return world.userOk ? j(200, { id: 'u1', aud: 'authenticated', role: 'authenticated', email: 'a@b.co' }) : j(401, { msg: 'bad jwt' });
   if (url.includes('/rest/v1/rpc/consume_credits')) return world.consumeError ? j(world.consumeError.http, world.consumeError.body) : j(200, world.consume);
   if (url.includes('/rest/v1/rpc/refund_credits')) return j(200, world.refund);
+  if (url.includes('/rest/v1/rpc/record_usage')) return world.recordFail ? j(500, { code: 'XX000', message: 'boom' }) : j(200, null);
   if (url.includes('/rest/v1/app_memberships')) return j(200, world.membership ? [world.membership] : []);
   if (url.includes('api.openai.com/v1/chat/completions')) return j(world.chat.status, world.chat.body);
   if (url.includes('api.openai.com')) {
@@ -121,8 +123,8 @@ test('generate-image: cobra ANTES de llamar a OpenAI, con el monto correcto, y n
   assert.equal(called('refund_credits').length, 0);
 });
 
-test('generate-image: el costo depende de la calidad y del tamaño (medium 2K = 8, high 1K = 15)', async () => {
-  for (const [quality, imageSize, amount] of [['medium', '2K', 8], ['high', '1K', 15], ['low', '2K', 2]]) {
+test('generate-image: el costo depende de la calidad y del tamaño (medium 2K = 6, high 1K = 9, por el núcleo)', async () => {
+  for (const [quality, imageSize, amount] of [['medium', '2K', 6], ['high', '1K', 9], ['low', '2K', 3]]) {
     reset();
     await POST(req('generate-image', { ...good, quality, imageSize }));
     assert.equal(rpcBody('consume_credits').p_amount, amount);

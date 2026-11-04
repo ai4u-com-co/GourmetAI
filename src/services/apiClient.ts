@@ -4,21 +4,10 @@ import { supabase } from './supabase';
 import { publishCredits } from './credits';
 import { logError } from '../utils/logger';
 import { buildPrompt, buildRecipePrompt } from './promptBuilder';
-import { DEFAULT_IMAGE_SIZE, DEFAULT_QUALITY } from '../constants/parameters';
+import { imageRequestOptions } from './imageOptions.ts';
 
 // Cliente de los endpoints del servidor (/api/*). La clave de OpenAI vive solo en Vercel: aquí solo viaja la sesión de Google.
-
-export const QUALITIES = [
-  { value: 'low', label: 'Borrador (1 crédito)', credits: 1 },
-  { value: 'medium', label: 'Buena (4 créditos)', credits: 4 },
-  { value: 'high', label: 'Máxima (15 créditos)', credits: 15 },
-] as const;
-
-/** Créditos que costará una imagen con esta calidad y tamaño (el servidor es quien manda; esto es solo para mostrarlo). */
-export const imageCost = (quality: string | undefined, imageSize: string | undefined): number => {
-  const base = QUALITIES.find((q) => q.value === quality)?.credits ?? 1; // sin calidad válida → Borrador
-  return imageSize === '2K' ? base * 2 : base;
-};
+// El costo en créditos que se muestra sale de `estimateImage` (imageOptions.ts), el mismo cálculo del servidor.
 
 export class ApiError extends Error {
   constructor(
@@ -89,7 +78,7 @@ const post = async (path: string, body: Record<string, unknown>): Promise<Record
 /** Reduce la foto antes de enviarla: el servidor acepta ≈750 KB por imagen y 4,5 MB por solicitud. */
 const shrink = (img: string) => compressImage(img, 1280, 0.82);
 
-/** Detecta los ingredientes de una foto de plato (no cobra créditos). */
+/** Detecta los ingredientes de una foto de plato (cuesta 1 crédito). */
 export const analyzeImage = async (imageBase64: string): Promise<string> => {
   const out = await post('/api/analyze-image', { image: await shrink(imageBase64) });
   return String(out.ingredients ?? '');
@@ -101,17 +90,17 @@ const imageRequest = async (prompt: string, parameters: DishParameters, refs: { 
   const out = await post('/api/generate-image', {
     prompt,
     images,
-    aspectRatio: parameters.aspectRatio,
-    // El servidor solo llega hasta 2K (límite de 4,5 MB por respuesta).
-    imageSize: parameters.imageSize === '2K' ? '2K' : DEFAULT_IMAGE_SIZE,
-    quality: QUALITIES.some((q) => q.value === parameters.quality) ? parameters.quality : DEFAULT_QUALITY,
+    // Modelo, calidad, formato, tamaño, formato de salida, fondo y variantes; un valor desconocido cae en lo más económico.
+    ...imageRequestOptions(parameters),
   });
-  if (typeof out.image !== 'string') {
+  // `images` trae todas las variantes; `image` (la primera) queda por compatibilidad con respuestas anteriores.
+  const list: string[] = Array.isArray(out.images) ? out.images.filter((x: unknown): x is string => typeof x === 'string') : typeof out.image === 'string' ? [out.image] : [];
+  if (list.length === 0) {
     const e = new ApiError('No se generó la imagen. Inténtalo de nuevo.', 'empty_image', typeof out.requestId === 'string' ? out.requestId : undefined);
     logError('api_empty_image', e);
     throw e;
   }
-  return [out.image];
+  return list;
 };
 
 /** Mejora la foto de un plato (con las referencias opcionales de plato, mesa, restaurante y cubiertos). */
@@ -119,8 +108,9 @@ export const generateGourmetVariants = (imageBase64: string, parameters: DishPar
   imageRequest(buildPrompt(parameters, ingredients, false), parameters, [
     { role: 'dish', data: imageBase64 },
     { role: 'plate', data: parameters.plateImage },
-    { role: 'table', data: parameters.tableImage },
-    { role: 'restaurant', data: parameters.restaurantImage },
+    // En un recorte (fondo transparente) no hay mesa ni ambiente: esas fotos no se envían ni se cobran.
+    { role: 'table', data: parameters.background === 'transparent' ? undefined : parameters.tableImage },
+    { role: 'restaurant', data: parameters.background === 'transparent' ? undefined : parameters.restaurantImage },
     { role: 'cutlery', data: parameters.cutleryImage },
   ]);
 
