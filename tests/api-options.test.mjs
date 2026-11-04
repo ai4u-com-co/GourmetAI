@@ -185,7 +185,7 @@ test('foto de entrada enorme (> 4.194.304 px) → 400 sin cobrar; sin dimensione
 test('las fotos de entrada se cobran por sus píxeles reales', async () => {
   reset();
   await POST(req('generate-image', { prompt: 'x', images: [{ role: 'dish', data: pngOf(1280, 960) }, { role: 'plate', data: pngOf(1280, 960) }] }));
-  assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions({}, { inputImagePixels: [1280 * 960, 1280 * 960] }).value.credits);
+  assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions({}, { promptChars: 'x'.length + 400, inputImagePixels: [1280 * 960, 1280 * 960] }).value.credits);
   assert.equal(rpcBody('consume_credits').p_meta.inputs, 2);
 });
 

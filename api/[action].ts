@@ -369,7 +369,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
     if (role === null) return json(500, { error: 'billing_error', message: 'No se pudo verificar tu rol. Inténtalo de nuevo.' });
     isAdmin = role;
   }
-  const resolved = resolveImageOptions(body, { inputImagePixels, isAdmin, promptChars: prompt.length + 400 });
+  const resolved = resolveImageOptions(body, { inputImagePixels, isAdmin, promptChars: Buffer.byteLength(prompt) + 400 });
   if (!resolved.ok) {
     log('warn', 'bad_options', { code: resolved.code });
     if (resolved.code === 'forbidden_moderation') return json(403, { error: 'admin_only', message: resolved.message });

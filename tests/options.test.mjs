@@ -27,7 +27,7 @@ test('valores viejos o inexistentes (historial antiguo) se normalizan a los defa
 test('el costo coincide con el núcleo y suma las fotos de entrada por píxeles', () => {
   const e = opt.estimateImage({ ...base, quality: 'high', numberOfImages: 2 }, [1280 * 960], false);
   assert.ok(e.ok);
-  assert.equal(e.value.credits, core.resolveImageOptions({ quality: 'high', n: 2 }, { inputImagePixels: [1280 * 960] }).value.credits);
+  assert.equal(e.value.credits, core.resolveImageOptions({ quality: 'high', n: 2 }, { estimate: true, inputImagePixels: [1280 * 960] }).value.credits);
   assert.ok(e.value.credits > opt.estimateImage({ ...base, quality: 'high', numberOfImages: 2 }, [], false).value.credits);
 });
 

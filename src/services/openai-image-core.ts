@@ -54,10 +54,15 @@ export function inputImageTokens(pixels: number): number {
   if (pixels < 655_360) return 1024;
   return Math.min(MAX_INPUT_IMAGE_TOKENS, Math.ceil(pixels / 1024));
 }
-/** Tokens de texto de un prompt (≈ 1 por 3,5 caracteres; el inglés es ~4, el español ~3). */
-export const textTokens = (chars: number): number => Math.ceil(Math.max(0, chars) / 3.5);
-/** Largo de prompt que se asume al ESTIMAR en el navegador antes de que exista el prompt final (el servidor usa el real). */
+/**
+ * Tokens de texto de un prompt: 1 por cada 3 BYTES UTF-8 (cota conservadora: el inglés ronda 4 bytes/token, el español ~3 y los
+ * alfabetos no latinos o los emojis usan varios bytes por carácter). El servidor pasa `Buffer.byteLength(prompt)`.
+ */
+export const textTokens = (bytes: number): number => Math.ceil(Math.max(0, bytes) / 3);
+/** Tamaño de prompt (bytes) que se asume SOLO al ESTIMAR en el navegador (`estimate: true`) antes de que exista el prompt final. */
 export const DEFAULT_PROMPT_CHARS = 1000;
+/** Tope de bytes de prompt que acepta el núcleo (los servidores ya acotan el suyo bastante por debajo). */
+export const MAX_PROMPT_BYTES = 200_000;
 /** Tope por imagen de entrada (2048x2048). El servidor lee las dimensiones REALES: no confía en que el navegador las reduzca. */
 export const MAX_INPUT_IMAGE_PIXELS = 4_194_304;
 
@@ -288,13 +293,20 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
  * Forma aceptada (todas las claves opcionales):
  *   { model: 'sunburst'|'flare', quality, aspectRatio, imageSize: '1K'|'2K'|'custom', size: 'WxH' (con imageSize 'custom'),
  *     format, compression, background, n, moderation }
- * ctx: `promptChars` = largo del prompt que viaja a OpenAI (el servidor pasa el real; sin él se asumen ~1.000 caracteres);
+ * ctx: `promptChars` = BYTES UTF-8 del prompt que viaja a OpenAI (el servidor pasa el real y es OBLIGATORIO: sin él falla cerrado);
+ * `estimate: true` = solo para el navegador: permite cotizar sin prompt final asumiendo ~1.000 bytes;
  * `inputImagePixels` = píxeles REALES (ancho×alto, leídos con `dataUrlDimensions`) de cada imagen de entrada; `isAdmin` = rol
  * verificado en el servidor (solo así se acepta moderation: 'low').
  * Nunca lanza: devuelve { ok:false, code, message } con un mensaje listo para mostrar.
  */
-export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: number[]; isAdmin?: boolean; promptChars?: number } = {}): Resolved {
+export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: number[]; isAdmin?: boolean; promptChars?: number; estimate?: boolean } = {}): Resolved {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  // Falla CERRADO: sin el tamaño real del prompt no se cobra (solo el navegador puede estimar, con `estimate: true`).
+  if (ctx.promptChars === undefined) {
+    if (ctx.estimate !== true) return fail('missing_prompt_length', 'Falta el tamaño del prompt para calcular el costo.');
+  } else if (typeof ctx.promptChars !== 'number' || !Number.isFinite(ctx.promptChars) || ctx.promptChars < 0 || ctx.promptChars > MAX_PROMPT_BYTES) {
+    return fail('bad_prompt_length', 'El tamaño del prompt no es válido.');
+  }
   const inputPixels = ctx.inputImagePixels ?? [];
   if (!Array.isArray(inputPixels) || inputPixels.some((p) => typeof p !== 'number' || !Number.isFinite(p) || p < 1 || p > MAX_INPUT_IMAGE_PIXELS)) {
     return fail('bad_input_image', `Cada imagen de referencia debe medir hasta ${MAX_INPUT_IMAGE_PIXELS.toLocaleString('es-CO')} píxeles (2048x2048).`);
@@ -352,6 +364,8 @@ export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: numb
   }
 
   const q = quality as ImageQualityKey;
+  const credits = creditsFor({ quality: q, width, height, n, inputPixels, promptChars: ctx.promptChars });
+  if (!Number.isInteger(credits) || credits < 1) return fail('bad_cost', 'No se pudo calcular el costo.'); // nunca un cobro NaN/negativo
   return {
     ok: true,
     value: {
@@ -367,7 +381,7 @@ export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: numb
       background: background as ImageBackground,
       moderation: moderation as 'auto' | 'low',
       n,
-      credits: creditsFor({ quality: q, width, height, n, inputPixels, promptChars: ctx.promptChars }),
+      credits,
       estimatedOutputTokens: estimateOutputTokens(q, width, height) * n,
       adminOnly: moderation === 'low',
     },
