@@ -1,5 +1,6 @@
 // Utilidades para randomización de parámetros
 
+import { DEFAULT_IMAGE_SIZE, DEFAULT_QUALITY } from '../constants/parameters';
 import {
   ESTILOS_PLATO,
   ILUMINACIONES,
@@ -84,7 +85,8 @@ export const generateRandomParameters = (): DishParameters => {
     anguloCamara: randomFrom(ANGULOS_CAMARA),
     profundidadCampo: randomFrom(PROFUNDIDADES_CAMPO),
     aspectRatio: randomFrom(ASPECT_RATIOS),
-    imageSize: '1K',
+    imageSize: DEFAULT_IMAGE_SIZE,
+    quality: DEFAULT_QUALITY,
     numberOfImages: 1,
     
     // Efectos Especiales
@@ -128,7 +130,8 @@ export const getDefaultParameters = (): DishParameters => {
     anguloCamara: '45',
     profundidadCampo: 'moderado',
     aspectRatio: '1:1',
-    imageSize: '1K',
+    imageSize: DEFAULT_IMAGE_SIZE,
+    quality: DEFAULT_QUALITY,
     numberOfImages: 1,
     
     // Efectos Especiales

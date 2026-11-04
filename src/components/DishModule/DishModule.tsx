@@ -17,6 +17,8 @@ import {
   MOMENTOS_DIA, 
   PROFUNDIDADES_CAMPO, 
   ASPECT_RATIOS, 
+  DEFAULT_IMAGE_SIZE,
+  DEFAULT_QUALITY,
   EFECTOS_VAPOR, 
   EFECTOS_FRESCURA 
 } from '../../constants/parameters';
@@ -64,6 +66,8 @@ const DishModule: React.FC = () => {
     momentoDelDia: MOMENTOS_DIA[0].value,
     profundidadCampo: PROFUNDIDADES_CAMPO[0].value,
     aspectRatio: ASPECT_RATIOS[0].value,
+    imageSize: DEFAULT_IMAGE_SIZE,
+    quality: DEFAULT_QUALITY,
     efectoVapor: EFECTOS_VAPOR[0].value,
     efectoFrescura: EFECTOS_FRESCURA[0].value,
     props: [],

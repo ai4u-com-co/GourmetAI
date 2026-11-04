@@ -331,3 +331,59 @@ test('éxito: se registra ok con duración y sin la imagen', async () => {
   assert.ok(ok && typeof ok.ms === 'number');
   assert.ok(!lines.join('\n').includes('QUJD'));
 });
+
+test('analyze-image: pide español, solo lo visible y sin inventar; «ninguno» (no es comida) vuelve vacío', async () => {
+  reset({ chat: { status: 200, body: { choices: [{ message: { content: 'Ninguno' } }] } } });
+  const r = await POST(req('analyze-image', { image: PNG_1PX }));
+  assert.equal((await r.json()).ingredients, '');
+  const sent = JSON.parse(called('chat/completions')[0].init.body);
+  const userText = sent.messages[1].content[0].text;
+  assert.match(userText, /en español/);
+  assert.match(userText, /no inventes/);
+  assert.match(userText, /máximo 15/);
+  assert.equal(sent.messages[1].content[1].image_url.detail, 'low');
+});
+
+test('generate-recipe: el mensaje de sistema fija rol, idioma y formato', async () => {
+  reset();
+  await POST(req('generate-recipe', { prompt: 'x' }));
+  const sent = JSON.parse(called('chat/completions')[0].init.body);
+  assert.match(sent.messages[0].content, /chef profesional/);
+  assert.match(sent.messages[0].content, /español/);
+  assert.match(sent.messages[0].content, /Markdown/);
+});
+
+test('generate-image: la numeración de imágenes explica el rol y prohíbe copiar comida de las referencias', async () => {
+  reset();
+  await POST(req('generate-image', { ...good, images: [{ role: 'plate', data: PNG_1PX }, { role: 'dish', data: PNG_1PX }] }));
+  const p = called('/images/edits')[0].body.get('prompt');
+  assert.match(p, /image 1 is the ORIGINAL DISH photo.*image 2 is the PLATE reference/s);
+  assert.match(p, /never copy food from a reference image/);
+});
+
+// ---------------------------------------------------------------- valores por defecto: GPT Image 2.5 y la opción más económica
+test('sin calidad ni tamaño: usa Borrador y 1K (1 crédito) con gpt-image-2.5-sunburst', async () => {
+  reset();
+  const { prompt, aspectRatio } = good;
+  const r = await POST(req('generate-image', { prompt, aspectRatio, images: [] }));
+  assert.equal(r.status, 200);
+  const out = await r.json();
+  assert.equal(out.model, 'gpt-image-2.5-sunburst');
+  assert.equal(rpcBody('consume_credits').p_amount, 1);
+  const sent = JSON.parse(called('/images/generations')[0].init.body);
+  assert.equal(sent.model, 'gpt-image-2.5-sunburst');
+  assert.equal(sent.quality, 'low');
+  assert.equal(sent.size, '1024x1024');
+});
+
+test('un valor inválido sigue rechazándose (no se «corrige» a otro más caro ni más barato)', async () => {
+  reset();
+  assert.equal((await POST(req('generate-image', { ...good, quality: 'ultra' }))).status, 400);
+  assert.equal(called('rpc').length, 0);
+});
+
+test('el modelo usado queda en el log del éxito', async () => {
+  reset();
+  const { lines } = await captureLogs(() => POST(req('generate-image', good)));
+  assert.equal(appLogs(lines).find((l) => l.event === 'ok').model, 'gpt-image-2.5-sunburst');
+});

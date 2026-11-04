@@ -1,9 +1,33 @@
-import { DishParameters } from '../types';
+import type { DishParameters } from '../types';
 
-// Prompts de imagen y de receta (tal como estaban en el servicio anterior). Las fotos de referencia viajan aparte:
-// el servidor las rotula por rol; aquí solo va el texto.
+// Prompts de la app, escritos según la guía oficial de OpenAI para GPT Image 2.5
+// (https://developers.openai.com/api/docs/guides/image-prompting):
+//   · el resultado primero y secciones etiquetadas (tarea · cambia · se conserva · especificaciones · realismo · exclusiones);
+//   · en ediciones, separar con claridad lo que CAMBIA de lo que se CONSERVA, y excluir añadidos no pedidos;
+//   · pedir realismo explícito (texturas e imperfecciones naturales), sin glamurizar ni retocar de más;
+//   · nada de líneas vacías: cada parámetro sin valor simplemente no aparece.
+// Las fotos de referencia viajan aparte: el servidor las numera y les asigna su rol ("image 1 is the ORIGINAL DISH…").
+// El tamaño y la proporción los fija el parámetro `size` de la API, no el texto. El prompt completo debe caber en 8000 caracteres.
 
-/** Construye el prompt dinámico de imagen según los parámetros */
+const list = (v: string | string[] | undefined): string => (Array.isArray(v) ? v.filter(Boolean).join(', ') : v || '');
+
+const section = (title: string, lines: (string | false | undefined)[]): string => {
+  const body = lines.filter((l): l is string => typeof l === 'string' && l.trim() !== '');
+  return body.length ? `${title}\n${body.join('\n')}` : '';
+};
+
+const REALISM = [
+  '- Natural, unretouched food photography: real textures (crumb, sheen, moisture, char), small natural imperfections, appetizing and fresh.',
+  '- Not plastic, not over-smoothed, no heavy retouching or glamorization.',
+];
+
+const EXCLUDE = [
+  '- No text, letters, logos, watermarks, borders or frames.',
+  '- No people or hands, no extra dishes, foods or utensils beyond what is specified.',
+  '- No distorted plates, melted geometry or duplicated elements.',
+];
+
+/** Prompt de imagen: mejora una foto existente (isFromScratch=false) o crea un plato desde una idea (true). */
 export const buildPrompt = (parameters: DishParameters, input: string, isFromScratch: boolean = false): string => {
   const {
     intensidadGourmet,
@@ -17,7 +41,6 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
     ambiente,
     momentoDelDia,
     profundidadCampo,
-    aspectRatio,
     efectoVapor,
     efectoFrescura,
     direccionLuz,
@@ -108,14 +131,6 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
     'todo-foco': 'everything in sharp focus'
   };
 
-  const aspectRatioMap: Record<string, string> = {
-    'original': '',
-    '1:1': 'square format',
-    '4:3': '4:3 format',
-    '16:9': '16:9 panoramic format',
-    '4:5': '4:5 vertical format'
-  };
-
   const direccionLuzMap: Record<string, string> = {
     'natural': 'natural light from a window',
     'frontal': 'direct frontal light',
@@ -167,201 +182,148 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
     'citricos': 'citrus zest'
   };
 
-  const intensidadText = intensidadGourmet <= 3 
-    ? 'subtle improvement maintaining natural look' 
-    : intensidadGourmet <= 7 
-    ? 'moderate transformation with gourmet presentation' 
-    : 'complete transformation with professional haute cuisine presentation';
+  const intensidadText = intensidadGourmet <= 3
+    ? 'subtle improvement; keep the natural, home look'
+    : intensidadGourmet <= 7
+    ? 'moderate transformation toward a gourmet presentation'
+    : 'strong transformation toward professional haute-cuisine presentation';
 
-  let decoracionesText = '';
-  if (decoracionesExtra && decoracionesExtra.length > 0) {
-    decoracionesText = decoracionesExtra.map(d => (d && decoracionesMap[d]) || d).join(', ');
-  }
-
-  const vajillaText = `${(tipoVajilla ? tipoVajillaMap[tipoVajilla] : '') || 'elegant plate'} color ${(colorVajilla ? colorVajillaMap[colorVajilla] : '') || 'neutral'}`;
-  const fondoCompleto = `${(fondo ? fondoMap[fondo] : '') || 'elegant background'}${texturaFondo && texturaFondoMap[texturaFondo] ? ` with ${texturaFondoMap[texturaFondo]}` : ''}`;
-  const iluminacionCompleta = `${(iluminacion ? iluminacionMap[iluminacion] : '') || 'professional lighting'}${direccionLuz && direccionLuzMap[direccionLuz] ? `, ${direccionLuzMap[direccionLuz]}` : ''}`;
-  const ambienteText = (ambiente ? ambienteMap[ambiente] : '') || '';
-  const momentoText = (momentoDelDia ? momentoDelDiaMap[momentoDelDia] : '') || '';
-  
-  let propsText = '';
-  if (props && Array.isArray(props) && props.length > 0) {
-    propsText = props.filter(p => p !== 'ninguno').map(p => (p && propsMap[p]) || p).filter(Boolean).join(', ');
-  }
-  
-  const saturacionText = saturacion ? (saturacionMap[saturacion] || '') : '';
+  const decoracionesText = (decoracionesExtra || []).map(d => (d && decoracionesMap[d]) || d).filter(Boolean).join(', ');
+  const propsText = (props || []).filter(p => p !== 'ninguno').map(p => (p && propsMap[p]) || p).filter(Boolean).join(', ');
   const efectosText = [
-    efectoVapor ? efectoVaporMap[efectoVapor] : '', 
+    efectoVapor ? efectoVaporMap[efectoVapor] : '',
     efectoFrescura ? efectoFrescuraMap[efectoFrescura] : ''
   ].filter(Boolean).join(', ');
 
-  let prompt = '';
+  const vajillaText = `${(tipoVajilla ? tipoVajillaMap[tipoVajilla] : '') || 'elegant plate'}, ${(colorVajilla ? colorVajillaMap[colorVajilla] : '') || 'neutral'} color`;
+  const fondoCompleto = `${(fondo ? fondoMap[fondo] : '') || 'elegant neutral background'}${texturaFondo && texturaFondoMap[texturaFondo] ? `, ${texturaFondoMap[texturaFondo]}` : ''}`;
+  const iluminacionCompleta = `${(iluminacion ? iluminacionMap[iluminacion] : '') || 'professional lighting'}${direccionLuz && direccionLuzMap[direccionLuz] ? `, ${direccionLuzMap[direccionLuz]}` : ''}`;
+  const ambienteText = (ambiente ? ambienteMap[ambiente] : '') || '';
+  const momentoText = (momentoDelDia ? momentoDelDiaMap[momentoDelDia] : '') || '';
+  const saturacionText = saturacion ? (saturacionMap[saturacion] || '') : '';
+
+  const spec = (plateLine: string) => section('SPECIFICATIONS:', [
+    `- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}`,
+    `- Tableware: ${plateLine}`,
+    `- Surface/background: ${fondoCompleto}`,
+    `- Lighting: ${iluminacionCompleta}`,
+    `- Camera angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional food-photography angle'}`,
+    `- Depth of field: ${(profundidadCampo ? profundidadCampoMap[profundidadCampo] : '') || 'moderate depth of field'}`,
+    ambienteText && `- Atmosphere: ${ambienteText}`,
+    momentoText && `- Time of day: ${momentoText}`,
+    saturacionText && `- Colors: ${saturacionText}`,
+    propsText && `- Props: ${propsText}`,
+    decoracionesText && `- Garnish/decoration: ${decoracionesText}`,
+    efectosText && `- Effects: ${efectosText}`,
+  ]);
+
   if (isFromScratch) {
-    prompt = `Generate a high-resolution professional food photograph based on the following description: "${input}".
-    
-    ADDITIONAL CULINARY INFORMATION:
-    ${Array.isArray(cuisineType) && cuisineType.length ? `- Cuisine type: ${cuisineType.join(', ')}` : ''}
-    ${Array.isArray(dishCategory) && dishCategory.length ? `- Category: ${dishCategory.join(', ')}` : ''}
-    ${Array.isArray(cookingTechnique) && cookingTechnique.length ? `- Technique: ${cookingTechnique.join(', ')}` : ''}
-    ${Array.isArray(culinaryTags) && culinaryTags.length ? `- Features: ${culinaryTags.join(', ')}` : ''}
-
-IMAGE SPECIFICATIONS:
-- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}
-- Tableware: ${vajillaText}
-- Background: ${fondoCompleto}
-- Lighting: ${iluminacionCompleta}
-- Angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional angle'}
-- Focus: ${(profundidadCampo ? profundidadCampoMap[profundidadCampo] : '') || 'moderate depth'}${ambienteText ? `\n- Atmosphere: ${ambienteText}` : ''}${momentoText ? `\n- Moment: ${momentoText}` : ''}${saturacionText ? `\n- Colors: ${saturacionText}` : ''}${propsText ? `\n- Props: ${propsText}` : ''}${decoracionesText ? `\n- Decoration: ${decoracionesText}` : ''}${efectosText ? `\n- Effects: ${efectosText}` : ''}${aspectRatio && aspectRatioMap[aspectRatio] ? `\n- Format: ${aspectRatioMap[aspectRatio]}` : ''}
-
-RESULT: A photorealistic image of culinary magazine quality. The food must look delicious, fresh, and perfectly lit.`;
-  } else {
-    const usePhysicalPlate = parameters.plateImage ? '\n- PHYSICAL PLATE: A photo of the physical plate has been provided. Use EXACTLY this plate for the final presentation.' : '';
-    const useTableRef = parameters.tableImage ? '\n- TABLE REFERENCE: A photo of a table has been provided. Use its surface, material, and texture as the background for the dish.' : '';
-    const useRestaurantRef = parameters.restaurantImage ? '\n- RESTAURANT REFERENCE: A photo of a restaurant has been provided. Use its atmosphere, lighting style, and background decor as inspiration for the environment.' : '';
-    const useCutleryRef = parameters.cutleryImage ? '\n- CUTLERY REFERENCE: A photo of cutlery has been provided. Use similar style and design for any cutlery shown in the final image.' : '';
-    
-    prompt = `Generate a professional gourmet food photograph based on this food image.
-
-ABSOLUTE INTEGRITY RULE:
-- The FOOD and INGREDIENTS must be EXACTLY the same as in the original image: ${input}.
-- Do not add, remove, or modify the main components of the food.
-- The goal is a professional PHOTOGRAPHIC RE-STYLING, maintaining the ESSENCE and APPEARANCE of the original food as faithfully as possible.
-- Maintain the arrangement, portions, and natural textures of the original ingredients.
-
-PHOTOGRAPHIC AND PRESENTATION IMPROVEMENT:
-- Transform the lighting to professional studio quality (soft side light, texture enhancement).
-- Improve sharpness and technical detail of the capture.
-- White balance and colorimetry must be perfect, highlighting natural freshness.
-- You can improve the plating and environment (plate, background, side decoration) to look like editorial or Michelin-star level photography.${usePhysicalPlate}${useTableRef}${useRestaurantRef}${useCutleryRef}
-
-IMAGE SPECIFICATIONS:
-- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}, ${intensidadText}
-- Tableware: ${parameters.plateImage ? 'Use the plate provided in the second image' : vajillaText}
-- Background: ${fondoCompleto}
-- Lighting: ${iluminacionCompleta}
-- Angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional angle'}
-- Focus: ${(profundidadCampo ? profundidadCampoMap[profundidadCampo] : '') || 'moderate depth'}${ambienteText ? `\n- Atmosphere: ${ambienteText}` : ''}${momentoText ? `\n- Moment: ${momentoText}` : ''}${saturacionText ? `\n- Colors: ${saturacionText}` : ''}${propsText ? `\n- Props: ${propsText}` : ''}${decoracionesText ? `\n- Decoration: ${decoracionesText}` : ''}${efectosText ? `\n- Effects: ${efectosText}` : ''}${aspectRatio && aspectRatioMap[aspectRatio] ? `\n- Format: ${aspectRatioMap[aspectRatio]}` : ''}
-
-RESULT: International magazine level food photography (like Michelin Guide or Bon Appétit), keeping the original food but with perfect technical photographic execution and gourmet presentation.`;
+    const culinary = section('DISH DETAILS (use them to make the dish authentic):', [
+      cuisineType?.length ? `- Cuisine: ${list(cuisineType)}` : '',
+      dishCategory?.length ? `- Category: ${list(dishCategory)}` : '',
+      cookingTechnique?.length ? `- Technique: ${list(cookingTechnique)}` : '',
+      culinaryTags?.length ? `- Features: ${list(culinaryTags)}` : '',
+    ]);
+    return [
+      `TASK: Photorealistic professional food photograph of this dish: "${input}".`,
+      culinary,
+      spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText),
+      section('REALISM:', REALISM),
+      section('EXCLUDE:', EXCLUDE),
+    ].filter(Boolean).join('\n\n');
   }
 
-  return prompt;
+  const refs = section('REFERENCES (use them only for what is stated; never copy food from them):', [
+    parameters.plateImage && '- PLATE reference: use exactly this plate (shape, material, color) for the final presentation.',
+    parameters.tableImage && '- TABLE reference: use its surface material, color and texture as the table.',
+    parameters.restaurantImage && '- RESTAURANT reference: take its atmosphere, light and decor as inspiration for the environment.',
+    parameters.cutleryImage && '- CUTLERY reference: use the same style and design for any cutlery shown.',
+  ]);
+
+  return [
+    'TASK: Professional food-photography re-styling of the provided dish photo (the ORIGINAL DISH image). Photorealistic result.',
+    section('CHANGE (only this):', [
+      '- Photographic execution: lighting, sharpness, white balance, depth of field and camera angle, as specified below.',
+      '- Presentation: plate, surface, props and the garnish listed below — nothing else.',
+      `- Degree of change: ${intensidadText}.`,
+    ]),
+    section('PRESERVE (must stay the same as the original photo):', [
+      `- The food itself: the same dish and ingredients${input ? ` (${input})` : ''}, the same components, portions and arrangement, the same colors and natural textures.`,
+      '- Do not add, remove, replace or invent any food or ingredient.',
+    ]),
+    refs,
+    spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText),
+    section('REALISM:', REALISM),
+    section('EXCLUDE:', EXCLUDE),
+  ].filter(Boolean).join('\n\n');
 };
 
-/** Prompt de la receta que coincide con el plato generado */
+/** Prompt (mensaje del usuario) de la receta. El modelo de texto NO ve la foto: trabaja con la descripción y los parámetros. */
 export const buildRecipePrompt = (input: string, parameters: DishParameters, ingredientsString: string = ''): string => {
-        const {
-            cuisineType,
-            dishCategory,
-            cookingTechnique,
-            culinaryTags,
-            estiloPlato,
-            ambiente,
-            momentoDelDia,
-            intensidadGourmet
-        } = parameters;
+  const { estiloPlato, ambiente, momentoDelDia, intensidadGourmet } = parameters;
+  const ingredients = ingredientsString || list(parameters.ingredients);
 
-        const getParamValue = (param: string | string[] | undefined): string => {
-          if (!param) return '';
-          return Array.isArray(param) ? param.join(', ') : param;
-        };
+  const ambienteMap: Record<string, string> = {
+    'restaurante': 'restaurante elegante',
+    'cocina-casera': 'cocina casera acogedora',
+    'terraza': 'terraza exterior',
+    'buffet': 'buffet profesional',
+    'estudio': 'estudio fotográfico'
+  };
+  const momentoMap: Record<string, string> = {
+    'desayuno': 'desayuno',
+    'brunch': 'brunch',
+    'almuerzo': 'almuerzo',
+    'cena': 'cena'
+  };
+  const estiloMap: Record<string, string> = {
+    'rustico': 'rústico y casero',
+    'minimalista': 'minimalista y limpio',
+    'clasico-elegante': 'clásico y elegante',
+    'moderno': 'moderno y vanguardista'
+  };
+  const nivel = intensidadGourmet <= 3
+    ? 'casera y natural'
+    : intensidadGourmet <= 7
+    ? 'gourmet moderada'
+    : 'de alta cocina profesional';
 
-        const cuisine = getParamValue(cuisineType);
-        const category = getParamValue(dishCategory);
-        const technique = getParamValue(cookingTechnique);
-        const tags = getParamValue(culinaryTags);
-        
-        const finalIngredients = ingredientsString || getParamValue(parameters.ingredients) || '';
-        
-        const ambienteMap: Record<string, string> = {
-          'sin-preferencia': '',
-          'restaurante': 'restaurante elegante',
-          'cocina-casera': 'cocina casera acogedora',
-          'terraza': 'terraza exterior',
-          'buffet': 'buffet profesional',
-          'estudio': 'estudio fotográfico'
-        };
+  const contexto = [
+    `- Plato: "${input}"`,
+    list(parameters.cuisineType) && `- Tipo de cocina: ${list(parameters.cuisineType)}`,
+    list(parameters.dishCategory) && `- Categoría: ${list(parameters.dishCategory)}`,
+    list(parameters.cookingTechnique) && `- Técnica principal: ${list(parameters.cookingTechnique)}`,
+    list(parameters.culinaryTags) && `- Características: ${list(parameters.culinaryTags)}`,
+    ingredients && `- Ingredientes base: ${ingredients}`,
+    estiloPlato && estiloMap[estiloPlato] && `- Estilo de presentación: ${estiloMap[estiloPlato]}`,
+    `- Nivel de presentación: ${nivel}`,
+    ambiente && ambienteMap[ambiente] && `- Ambiente: ${ambienteMap[ambiente]}`,
+    momentoDelDia && momentoMap[momentoDelDia] && `- Momento del día: ${momentoMap[momentoDelDia]}`,
+  ].filter(Boolean).join('\n');
 
-        const momentoDelDiaMap: Record<string, string> = {
-          'sin-preferencia': '',
-          'desayuno': 'desayuno matutino',
-          'brunch': 'brunch de media mañana',
-          'almuerzo': 'almuerzo de mediodía',
-          'cena': 'cena romántica nocturna'
-        };
+  return `Escribe una receta completa y fácil de seguir para este plato.
 
-        const estiloMap: Record<string, string> = {
-          'rustico': 'rústico y casero',
-          'minimalista': 'minimalista y limpio',
-          'clasico-elegante': 'clásico y elegante',
-          'moderno': 'moderno y vanguardista'
-        };
-        
-        const estilo = estiloPlato ? estiloMap[estiloPlato] || estiloPlato : '';
-        const ambienteText = ambiente && ambiente !== 'sin-preferencia' ? ambienteMap[ambiente] || ambiente : '';
-        const momentoText = momentoDelDia && momentoDelDia !== 'sin-preferencia' ? momentoDelDiaMap[momentoDelDia] || momentoDelDia : '';
-        
-        const nivelGourmet = intensidadGourmet <= 3 
-          ? 'presentación casera y natural' 
-          : intensidadGourmet <= 7 
-          ? 'presentación gourmet moderada' 
-          : 'presentación de alta cocina profesional';
+CONTEXTO:
+${contexto}
 
-        const prompt = `Eres un chef profesional experto. Tu tarea es crear una receta detallada pero fácil de seguir que coincida EXACTAMENTE con el plato que se muestra en la fotografía generada.
+CÓMO USAR EL CONTEXTO:
+- Los ingredientes base pueden venir de una detección automática y estar incompletos o equivocados: úsalos como punto de partida, completa lo necesario para que el plato funcione y marca con "(opcional)" lo que no sea seguro.
+- Respeta la cocina, la categoría y la técnica indicadas; si hay varias, intégralas con coherencia.
+- Cantidades en unidades métricas (g, ml, cucharadas, tazas) y precisas; para cocineros caseros.
 
-**INFORMACIÓN DEL PLATO GENERADO:**
+FORMATO (Markdown, exactamente estas secciones y en este orden):
+### Nombre creativo y apetitoso del plato
+**Porciones:** n · **Tiempo total:** x min · **Dificultad:** fácil | media | difícil
 
-**Descripción / Idea Principal:**
-"${input}"
-
-**CONTEXTO CULINARIO (Estos parámetros definen el plato):**
-${cuisine ? `- Tipo de Cocina: ${cuisine}` : ''}
-${category ? `- Categoría del Plato: ${category}` : ''}
-${technique ? `- Técnica de Cocción Principal: ${technique}` : ''}
-${tags ? `- Características / Etiquetas Culinarias: ${tags}` : ''}
-${finalIngredients ? `- Ingredientes Clave: ${finalIngredients}` : ''}
-
-**CONTEXTO VISUAL Y PRESENTACIÓN (Estos parámetros afectan cómo se ve el plato):**
-${estilo ? `- Estilo de Presentación: ${estilo}` : ''}
-${ambienteText ? `- Ambiente: ${ambienteText}` : ''}
-${momentoText ? `- Momento del Día: ${momentoText}` : ''}
-${intensidadGourmet ? `- Nivel de Presentación: ${nivelGourmet}` : ''}
-
-**INSTRUCCIONES CRÍTICAS:**
-
-1. La receta DEBE coincidir exactamente con lo que se ve en la fotografía generada
-2. Usa los ingredientes especificados y las técnicas de cocción mencionadas
-3. El estilo de presentación debe reflejar el contexto visual (${estilo || 'elegante'})
-4. La receta debe ser apropiada para el momento del día (${momentoText || 'cualquier momento'})
-5. Si hay múltiples tipos de cocina o categorías, integra sus características de manera coherente
-6. La receta debe ser práctica, clara y deliciosa
-
-**FORMATO REQUERIDO (Markdown):**
-
-### [Nombre Creativo y Apetitoso del Plato que Refleje los Parámetros]
-
-**Descripción:**
-Una breve descripción (2-3 frases) que evoque el estilo culinario, los ingredientes principales y el contexto del plato. Debe sonar apetitoso y profesional.
+**Descripción:** 2 frases que evoquen el plato.
 
 **Ingredientes:**
-- [Lista completa de ingredientes con cantidades específicas]
-- [Incluir todos los ingredientes mencionados y los necesarios para la técnica de cocción]
-- [Cantidades deben ser precisas y prácticas]
+- cantidad + ingrediente (una línea cada uno)
 
-**Instrucciones Paso a Paso:**
-1. [Paso detallado que refleje la técnica de cocción especificada]
-2. [Continuar con pasos claros y secuenciales]
-3. [Incluir detalles sobre presentación si es relevante]
-...
+**Preparación:**
+1. un paso por número, una acción clara, con tiempos y señales de punto (color, textura, aroma)
 
-**Consejo del Chef:**
-Un tip práctico y breve relacionado con la técnica de cocción, los ingredientes o la presentación del plato.
+**Consejo del chef:** una frase práctica.
 
-**Notas:**
-- Asegúrate de que la receta sea coherente con el tipo de cocina y categoría especificados
-- La presentación debe reflejar el estilo visual elegido
-- Los ingredientes deben coincidir con los especificados
-
-Mantén un tono profesional, inspirador pero accesible. La receta debe ser clara y fácil de seguir para cualquier cocinero casero.`;
-  return prompt;
+No agregues introducciones, notas ni comentarios sobre estas instrucciones ni sobre fotos o imágenes.`;
 };

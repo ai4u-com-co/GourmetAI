@@ -19,7 +19,9 @@ const APP_ID = 'gourmetai';
 
 const OPENAI = 'https://api.openai.com/v1';
 const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
-const IMAGE_FALLBACK_MODEL = 'gpt-image-2';
+const IMAGE_FALLBACK_MODEL = 'gpt-image-2'; // solo si 2.5 respondiera 404/model_not_found; el modelo usado queda en la respuesta y en el log
+const DEFAULT_QUALITY = 'low';
+const DEFAULT_IMAGE_SIZE = '1K';
 const TEXT_MODEL = 'gpt-4o-mini';
 const TIMEOUT_MS = 280_000;
 
@@ -43,12 +45,13 @@ const DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
 // Papel de cada foto de referencia; el orden manda para que el modelo sepa cuál es cuál.
 const ROLE_ORDER = ['dish', 'plate', 'table', 'restaurant', 'cutlery'] as const;
 const ROLE_TEXT: Record<(typeof ROLE_ORDER)[number], string> = {
-  dish: 'the ORIGINAL DISH photo to improve (keep the food itself)',
-  plate: 'the physical PLATE to use',
-  table: 'the TABLE surface to use',
-  restaurant: 'the RESTAURANT / environment to place the scene in',
-  cutlery: 'the CUTLERY to use',
+  dish: 'the ORIGINAL DISH photo (the food to re-style)',
+  plate: 'the PLATE reference',
+  table: 'the TABLE reference',
+  restaurant: 'the RESTAURANT reference',
+  cutlery: 'the CUTLERY reference',
 };
+
 
 // ---------------------------------------------------------------- registro
 // Una línea JSON por evento, con el id de la solicitud (rid) para cruzar lo que ve la persona («ref. abc12345») con los logs
@@ -66,6 +69,15 @@ const log = (level: 'info' | 'warn' | 'error', event: string, data: Record<strin
   const line = JSON.stringify({ app: 'gourmetai', level, event, rid: c?.rid, action: c?.action, user: c?.userId, ms: c ? Date.now() - c.t0 : undefined, ...data });
   (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(line);
 };
+
+// ---------------------------------------------------------------- prompts de texto
+const RECIPE_SYSTEM =
+  'Eres un chef profesional que enseña a cocineros caseros. Respondes siempre en español, en Markdown y siguiendo exactamente el formato pedido. ' +
+  'Eres preciso con cantidades y tiempos, no inventas marcas ni técnicas imposibles, y no escribes introducciones ni comentarios fuera del formato.';
+const ANALYZE_PROMPT =
+  'Identifica los ingredientes que se ven en esta foto de un plato. Reglas: responde en español; solo los ingredientes, separados por comas; ' +
+  'solo lo que se ve o es evidente (no inventes salsas, especias ni rellenos que no se distingan); sin cantidades, sin repetidos y máximo 15; ' +
+  'si la imagen no es comida, responde exactamente: ninguno.';
 
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -249,7 +261,7 @@ const runCharged = async (
       const e = userError(result);
       return json(e.http, { error: e.error, message: noCharge(e.message, s.refunded), remaining: s.remaining });
     }
-    log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin' });
+    log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin', model: result.body.model });
     return json(200, { ...result.body, remaining: charge.remaining, charged: charge.refund_token ? amount : 0 });
   } catch (err: any) {
     const aborted = err?.name === 'AbortError';
@@ -275,8 +287,9 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
 
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   const aspect = String(body.aspectRatio ?? '');
-  const sizeKey = String(body.imageSize ?? '');
-  const quality = String(body.quality ?? '');
+  // Sin valor → la opción más económica (Borrador, 1K). Un valor inválido sí se rechaza.
+  const sizeKey = String(body.imageSize ?? DEFAULT_IMAGE_SIZE);
+  const quality = String(body.quality ?? DEFAULT_QUALITY);
   const rawImages: unknown = body.images ?? [];
   // Solo propiedades PROPIAS: con `in` o `obj[k]` entrarían claves heredadas ('constructor', '__proto__', 'toString'…).
   const sizeTable = Object.hasOwn(SIZES, sizeKey) ? SIZES[sizeKey] : undefined;
@@ -301,7 +314,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
   const ordered = ROLE_ORDER.filter((r) => byRole.has(r));
   const images = ordered.map((r) => byRole.get(r) as string);
   const preface = ordered.length
-    ? `Reference images, in order: ${ordered.map((r, i) => `image ${i + 1} is ${ROLE_TEXT[r]}`).join('; ')}.\n\n`
+    ? `Input images, in order: ${ordered.map((r, i) => `image ${i + 1} is ${ROLE_TEXT[r]}`).join('; ')}. Use each reference only for what the task states; never copy food from a reference image.\n\n`
     : '';
 
   const amount = BASE_CREDITS[quality] * (sizeKey === '2K' ? 2 : 1);
@@ -339,7 +352,7 @@ const handleGenerateRecipe = async (request: Request, openaiKey: string): Promis
     auth.sb,
     charge,
     async (signal) => {
-      const r = await callText(openaiKey, { system: 'Eres un chef profesional. Responde siempre en español y en Markdown.', user: prompt, maxTokens: 1800 }, signal);
+      const r = await callText(openaiKey, { system: RECIPE_SYSTEM, user: prompt, maxTokens: 1800 }, signal);
       return r.ok ? { ok: true, body: { recipe: r.text } } : r;
     },
     RECIPE_CREDITS,
@@ -363,14 +376,15 @@ const handleAnalyzeImage = async (request: Request, openaiKey: string): Promise<
       const r = await callText(
         openaiKey,
         {
-          system: 'Identificas ingredientes en fotos de comida.',
-          user: 'Lista todos los ingredientes que identificas en esta imagen de comida. Responde solo con ingredientes separados por comas, sin explicaciones.',
+          system: 'Eres un asistente de cocina que identifica ingredientes en fotos de platos de comida.',
+          user: ANALYZE_PROMPT,
           image,
           maxTokens: 200,
         },
         signal,
       );
-      return r.ok ? { ok: true, body: { ingredients: r.text } } : r;
+      // «ninguno» = la foto no es comida: se devuelve vacío para no contaminar el prompt de imagen.
+      return r.ok ? { ok: true, body: { ingredients: /^ninguno\.?$/i.test(r.text.trim()) ? '' : r.text } } : r;
     },
     ANALYZE_CREDITS,
   );

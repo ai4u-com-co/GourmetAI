@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { publishCredits } from './credits';
 import { logError } from '../utils/logger';
 import { buildPrompt, buildRecipePrompt } from './promptBuilder';
+import { DEFAULT_IMAGE_SIZE, DEFAULT_QUALITY } from '../constants/parameters';
 
 // Cliente de los endpoints del servidor (/api/*). La clave de OpenAI vive solo en Vercel: aquí solo viaja la sesión de Google.
 
@@ -15,7 +16,7 @@ export const QUALITIES = [
 
 /** Créditos que costará una imagen con esta calidad y tamaño (el servidor es quien manda; esto es solo para mostrarlo). */
 export const imageCost = (quality: string | undefined, imageSize: string | undefined): number => {
-  const base = QUALITIES.find((q) => q.value === quality)?.credits ?? 1;
+  const base = QUALITIES.find((q) => q.value === quality)?.credits ?? 1; // sin calidad válida → Borrador
   return imageSize === '2K' ? base * 2 : base;
 };
 
@@ -102,8 +103,8 @@ const imageRequest = async (prompt: string, parameters: DishParameters, refs: { 
     images,
     aspectRatio: parameters.aspectRatio,
     // El servidor solo llega hasta 2K (límite de 4,5 MB por respuesta).
-    imageSize: parameters.imageSize === '2K' ? '2K' : '1K',
-    quality: parameters.quality || 'low',
+    imageSize: parameters.imageSize === '2K' ? '2K' : DEFAULT_IMAGE_SIZE,
+    quality: QUALITIES.some((q) => q.value === parameters.quality) ? parameters.quality : DEFAULT_QUALITY,
   });
   if (typeof out.image !== 'string') {
     const e = new ApiError('No se generó la imagen. Inténtalo de nuevo.', 'empty_image', typeof out.requestId === 'string' ? out.requestId : undefined);
