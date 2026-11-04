@@ -141,13 +141,15 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
   const b64 = input.startsWith('data:') ? input.slice(input.indexOf(',') + 1) : input;
   let bytes: Uint8Array;
   try {
-    // Solo la cabecera (hasta 192 KB): suficiente para PNG/WebP y para llegar al SOF de casi cualquier JPEG
-    const bin = atob(b64.slice(0, 262_144));
+    // Se lee TODA la imagen (el servidor ya limita cada una a ~1 MB de base64): un decodificador distinto no debe poder ver
+    // algo que este lector no vio (segundo SOF, otra imagen incrustada, lienzo ≠ cuadro…).
+    const bin = atob(b64.slice(0, 2_000_000));
     bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   } catch {
     return null;
   }
   const u32 = (o: number) => ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
+  const u32le = (o: number) => (bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24)) >>> 0;
   const ascii = (o: number, n: number) => String.fromCharCode(...bytes.slice(o, o + n));
   const ok = (width: number, height: number) => (Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0 && width < 2 ** 31 && height < 2 ** 31 ? { width, height } : null);
 
@@ -156,41 +158,79 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
     if (u32(8) !== 13 || ascii(12, 4) !== 'IHDR') return null;
     return ok(u32(16), u32(20));
   }
-  // WebP: RIFF....WEBP + (VP8 con su código de inicio | VP8L con su firma | VP8X)
+
+  // WebP: RIFF....WEBP. Simple (VP8 / VP8L) o extendido (VP8X). En VP8X el lienzo DEBE coincidir con el cuadro del primer
+  // fragmento de imagen y no se aceptan animaciones (sumarían más píxeles de los que declara el lienzo).
   if (bytes.length >= 30 && ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP') {
-    const kind = ascii(12, 4);
-    if (kind === 'VP8X') return ok(1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)), 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)));
-    if (kind === 'VP8L' && bytes[20] === 0x2f) {
-      const bits = (bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24)) >>> 0;
-      return ok(1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff));
-    }
-    if (kind === 'VP8 ' && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
-      return ok((bytes[26] | (bytes[27] << 8)) & 0x3fff, (bytes[28] | (bytes[29] << 8)) & 0x3fff);
+    const frameDims = (o: number): { width: number; height: number } | null => {
+      const kind = ascii(o, 4);
+      if (kind === 'VP8L' && bytes[o + 8] === 0x2f) {
+        const bits = u32le(o + 9);
+        return ok(1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff));
+      }
+      if (kind === 'VP8 ' && bytes[o + 11] === 0x9d && bytes[o + 12] === 0x01 && bytes[o + 13] === 0x2a) {
+        return ok((bytes[o + 14] | (bytes[o + 15] << 8)) & 0x3fff, (bytes[o + 16] | (bytes[o + 17] << 8)) & 0x3fff);
+      }
+      return null;
+    };
+    const first = ascii(12, 4);
+    if (first !== 'VP8X') return frameDims(12);
+    if (bytes[20] & 0x02) return null; // bandera de animación
+    const canvas = ok(1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)), 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)));
+    if (!canvas) return null;
+    let o = 12 + 8 + u32le(16) + (u32le(16) & 1); // después del fragmento VP8X (con relleno a par)
+    while (o + 8 <= bytes.length) {
+      const kind = ascii(o, 4);
+      if (kind === 'ANMF' || kind === 'ANIM') return null;
+      if (kind === 'VP8 ' || kind === 'VP8L') {
+        const f = frameDims(o);
+        return f && f.width === canvas.width && f.height === canvas.height ? canvas : null;
+      }
+      const size = u32le(o + 4);
+      o += 8 + size + (size & 1);
     }
     return null;
   }
-  // JPEG: recorrido ESTRICTO de segmentos (sin resincronizar a ciegas). Una imagen con dos SOF, sin SOF antes de SOS,
-  // o con bytes sueltos entre segmentos es ambigua (cada decodificador la leería distinto) y se rechaza.
+
+  // JPEG: recorrido ESTRICTO. Debe haber EXACTAMENTE un SOF antes del SOS; después del SOS (datos comprimidos) no puede
+  // aparecer otro SOF ni otro SOI (otra imagen incrustada), ni antes ni después del EOI. Con eso, cualquier decodificador
+  // ve la misma imagen que este lector.
   if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    const isSof = (m: number) => m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc;
     let o = 2;
     let found: { width: number; height: number } | null = null;
+    let sos = -1;
     while (o + 4 <= bytes.length) {
       if (bytes[o] !== 0xff) return null;
       while (bytes[o + 1] === 0xff) o++; // relleno 0xFF permitido por la especificación
       const marker = bytes[o + 1];
-      if (marker === 0x00) return null;
-      if (marker === 0xda || marker === 0xd9) return found; // SOS/EOI: terminó la cabecera
-      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) { o += 2; continue; }
+      if (marker === 0x00 || marker === 0xd8) return null; // SOI anidado
+      if (marker === 0xd9) return null; // EOI antes del primer SOS: no hay imagen
+      if (marker === 0xda) {
+        const len = (bytes[o + 2] << 8) | bytes[o + 3];
+        if (!found || len < 6) return null;
+        sos = o + 2 + len;
+        break;
+      }
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { o += 2; continue; }
       const len = (bytes[o + 2] << 8) | bytes[o + 3];
       if (len < 2) return null;
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (isSof(marker)) {
         if (found || len < 8) return null; // segundo SOF o SOF truncado
         found = ok((bytes[o + 7] << 8) | bytes[o + 8], (bytes[o + 5] << 8) | bytes[o + 6]);
         if (!found) return null;
       }
       o += 2 + len;
     }
-    return null; // la cabecera no terminó dentro de lo leído (no se acepta a medias)
+    if (sos < 0 || !found) return null;
+    // Datos comprimidos y lo que sigue: solo marcadores legítimos de una imagen (RSTn, DHT, DRI, SOS de progresivos, EOI…)
+    for (let i = sos; i + 1 < bytes.length; i++) {
+      if (bytes[i] !== 0xff) continue;
+      const m = bytes[i + 1];
+      if (m === 0xd8 || isSof(m)) return null; // otra imagen o un segundo SOF escondido
+      if (m !== 0x00 && m !== 0xff) i++; // salta el marcador (FF00 = byte relleno, FFFF = relleno)
+    }
+    return found;
   }
   return null;
 }
