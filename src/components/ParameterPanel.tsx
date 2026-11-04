@@ -19,7 +19,7 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CasinoIcon from '@mui/icons-material/Casino';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { useApi } from '../context/ApiContext';
+import { QUALITIES, imageCost } from '../services/apiClient';
 import {
   ESTILOS_PLATO,
   ILUMINACIONES,
@@ -41,6 +41,7 @@ interface ParameterPanelProps {
   onGenerate: () => void;
   isGenerating: boolean;
   hideHeaderControls?: boolean;
+  extraCredits?: number; // costo fijo adicional (p. ej. detectar ingredientes en el flujo de foto)
 }
 
 const ParameterPanel: React.FC<ParameterPanelProps> = ({ 
@@ -48,11 +49,10 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
   onParameterChange, 
   onGenerate, 
   isGenerating, 
-  hideHeaderControls = false 
+  hideHeaderControls = false,
+  extraCredits = 0
 }) => {
   const theme = useTheme();
-  const { isApiKeySet } = useApi();
-  
   const {
     intensidadGourmet,
     estiloPlato,
@@ -62,7 +62,8 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
     anguloCamara,
     ambiente,
     aspectRatio,
-    imageSize
+    imageSize,
+    quality
   } = parameters;
 
   const handleDecoracionChange = (value: string) => {
@@ -221,6 +222,18 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
         </FormControl>
       </Box>
 
+      <FormControl fullWidth size="small" sx={{ mb: 3 }}>
+        <InputLabel>Calidad</InputLabel>
+        <Select
+          value={quality || 'low'}
+          label="Calidad"
+          onChange={handleSelectChange('quality')}
+          sx={{ borderRadius: 0 }}
+        >
+          {QUALITIES.map((q) => <MenuItem key={q.value} value={q.value}>{q.label}</MenuItem>)}
+        </Select>
+      </FormControl>
+
       <Accordion sx={accordionStyle}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={summaryStyle}>
           <Typography variant="subtitle1" fontWeight="600" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.9rem' }}>
@@ -324,7 +337,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
         fullWidth
         size="large"
         onClick={onGenerate}
-        disabled={isGenerating || !isApiKeySet}
+        disabled={isGenerating}
         sx={{ 
           mt: 4, 
           py: 2,
@@ -340,7 +353,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
           },
         }}
       >
-        {isGenerating ? 'PROCESANDO...' : (!isApiKeySet ? 'CONFIGURA TU API KEY' : 'GENERAR IMAGEN')}
+        {isGenerating ? 'PROCESANDO...' : `GENERAR IMAGEN · ${imageCost(quality, imageSize) + extraCredits} ${imageCost(quality, imageSize) + extraCredits === 1 ? 'CRÉDITO' : 'CRÉDITOS'}`}
       </Button>
     </Paper>
   );

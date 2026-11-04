@@ -1,84 +1,43 @@
-# GourmetAI
+# GourmetAI (VisualFeast)
 
-Aplicación web que transforma fotografías de platos de comida en versiones visualmente mejoradas con presentación gourmet usando Gemini 3.0 API.
+App web instalable (PWA) que mejora fotos de platos con presentación gourmet, crea platos desde una idea, detecta ingredientes y genera recetas con IA.
+Software propio de Ai4U. Entra con Google; la IA es **GPT Image 2.5** (imágenes) y `gpt-4o-mini` (ingredientes y recetas) de OpenAI.
 
-## Características
+## Cómo funciona
 
-- 🖼️ Carga de imágenes desde galería o cámara
-- 🔍 Identificación automática de ingredientes vía Gemini 3
-- 🎛️ Panel de parámetros ajustables para personalización
-- ✨ Generación de imágenes gourmet mejoradas
-- 📜 Historial de generaciones persistente (LocalStorage)
-- 💾 Descarga de imágenes con metadata
-- 📜 Generación de recetas creativas vía Gemini 3
-- 🔒 Seguridad: Helmet, Rate Limiting, CORS configurado
-- 🗜️ Compresión de respuestas para mejor rendimiento
+- **Login**: Google vía Supabase (PKCE) en el proyecto compartido **`apps`** (`dmracybffqdvcltkarag`), app `gourmetai`. El acceso lo decide la membresía en `core.app_memberships`; `open_signup` está apagado hasta lanzar la app.
+- **Créditos**: la clave de OpenAI es de Mariano, así que el control está en el servidor. `api/[action].ts` valida la sesión, cobra con `core.consume_credits` **antes** de llamar a OpenAI y devuelve el cobro (`core.refund_credits`) si falla. Los admin no pagan. El `refund_token` nunca llega al navegador.
+  - Imagen: Borrador 1 · Buena 4 · Máxima 15 créditos (×2 en 2K). Receta: 1 crédito. Detectar ingredientes de una foto: 1 crédito.
+  - Saldo inicial al unirse: 10 créditos (`core.apps.default_credits`).
+- **Instalable**: `manifest.json` + `sw.js` + íconos. El service worker solo guarda la cáscara de la app; **nunca** `/api/*` ni Supabase.
+- **Historial**: en el navegador, **por cuenta** (`gourmet_ai_history_<user_id>`). El historial anterior (sin dueño) se ofrece importar a la primera cuenta que entre.
 
-## Requisitos Previos
+## Variables de entorno
 
-- Node.js 18 o superior
-- npm o yarn
-- API Key de Gemini 3.0 Pro (Google AI Studio)
+Solo una, en Vercel (Production, **Sensitive**): `OPENAI_API_KEY`. La URL y la clave *publishable* de Supabase son públicas y están en el código. Nunca uses `REACT_APP_*` para secretos (viajan al navegador).
 
-## Instalación
+## Desarrollo
 
-1. Clona el repositorio o descarga el código fuente
-
-2. Instala las dependencias:
 ```bash
 npm install
+npm run typecheck && npm run lint
+npm test            # 23 pruebas del servidor (Supabase y OpenAI simulados, sin red)
+npm run build
 ```
 
-3. Configura las variables de entorno:
-   - Copia el archivo `env.example.txt` a `.env` y configura tus valores:
-```env
-# API de Gemini (Requerido para imágenes, ingredientes y recetas)
-REACT_APP_GEMINI_API_KEY=tu_api_key_de_gemini
+Para probar `/api/*` en local hace falta `vercel dev` con `OPENAI_API_KEY` en `.env.local` (no se commitea).
 
-# Entorno
-NODE_ENV=development
-```
-
-## Ejecución Local
-
-### Ejecutar Todo Junto (Recomendado)
-
-Ejecuta tanto el servidor proxy como la aplicación React:
-
-```bash
-npm run dev
-```
-
-Esto iniciará:
-- Servidor de API en `http://localhost:3001`
-- Aplicación React en `http://localhost:3000`
-
-La aplicación se abrirá automáticamente en [http://localhost:3000](http://localhost:3000)
-
-## Estructura del Proyecto
+## Estructura
 
 ```
-GourmetAI/
-├── api/                    # Backend Express
-│   └── index.ts           # Endpoint principal de API
-├── src/                    # Código fuente frontend (React)
-│   ├── components/         # Componentes React
-│   ├── hooks/              # Custom React hooks
-│   ├── services/           # Servicios de API (comunicación con /api/*)
-│   ├── utils/              # Utilidades
-│   └── __tests__/          # Tests
-├── public/                 # Archivos públicos
-├── package.json
-└── README.md
+api/[action].ts        # analyze-image · generate-image · generate-recipe (Vercel Function)
+src/services/          # apiClient (llama a /api), promptBuilder, supabase, credits
+src/hooks/useAuth.ts   # sesión + membresía + saldo
+public/                # manifest.json, sw.js, íconos
+tests/api.test.mjs
 ```
 
-## Arquitectura
+## Instalar en el celular
 
-La aplicación usa un modelo híbrido para máxima seguridad y rendimiento:
-- **Frontend (React)**: Interfaz de usuario que se comunica con `/api/*`.
-- **Backend (Express)**: Maneja las llamadas a las APIs de IA (Gemini) protegiendo las API Keys y evitando problemas de CORS.
-- **Persistencia**: Las generaciones se guardan automáticamente en el `localStorage` del navegador para consulta posterior.
-
-## Licencia
-
-Este proyecto es privado y de uso interno.
+- **Android / Chrome**: botón «Instalar app» en la cabecera, o menú ⋮ → *Instalar aplicación*.
+- **iPhone / Safari**: Compartir → *Añadir a pantalla de inicio*.
