@@ -1,0 +1,210 @@
+{
+ "_nota": "Medido con la API real (gpt-image-2.5-sunburst, calidad low) el 5-nov-2026. output_tokens por tamaño y text_tokens por prompt; deterministas (189 y 158 repetidos).",
+ "sizes": [
+  {
+   "width": 1280,
+   "height": 1024,
+   "outputTokens": 173
+  },
+  {
+   "width": 1280,
+   "height": 960,
+   "outputTokens": 155
+  },
+  {
+   "width": 1536,
+   "height": 1152,
+   "outputTokens": 181
+  },
+  {
+   "width": 1792,
+   "height": 1280,
+   "outputTokens": 189
+  },
+  {
+   "width": 1024,
+   "height": 1536,
+   "outputTokens": 158
+  },
+  {
+   "width": 1152,
+   "height": 1536,
+   "outputTokens": 181
+  },
+  {
+   "width": 720,
+   "height": 1280,
+   "outputTokens": 106
+  },
+  {
+   "width": 1024,
+   "height": 1792,
+   "outputTokens": 139
+  },
+  {
+   "width": 1536,
+   "height": 1024,
+   "outputTokens": 158
+  },
+  {
+   "width": 1664,
+   "height": 1152,
+   "outputTokens": 173
+  },
+  {
+   "width": 1600,
+   "height": 1120,
+   "outputTokens": 167
+  },
+  {
+   "width": 1680,
+   "height": 1120,
+   "outputTokens": 171
+  },
+  {
+   "width": 2048,
+   "height": 1408,
+   "outputTokens": 215
+  },
+  {
+   "width": 1408,
+   "height": 1024,
+   "outputTokens": 166
+  },
+  {
+   "width": 1024,
+   "height": 768,
+   "outputTokens": 134
+  },
+  {
+   "width": 1152,
+   "height": 864,
+   "outputTokens": 144
+  },
+  {
+   "width": 2048,
+   "height": 896,
+   "outputTokens": 108
+  },
+  {
+   "width": 2560,
+   "height": 1024,
+   "outputTokens": 111
+  },
+  {
+   "width": 1920,
+   "height": 640,
+   "outputTokens": 65
+  },
+  {
+   "width": 2560,
+   "height": 1440,
+   "outputTokens": 205
+  },
+  {
+   "width": 1920,
+   "height": 1920,
+   "outputTokens": 364
+  },
+  {
+   "width": 2048,
+   "height": 1360,
+   "outputTokens": 211
+  },
+  {
+   "width": 1360,
+   "height": 2048,
+   "outputTokens": 211
+  },
+  {
+   "width": 1920,
+   "height": 1280,
+   "outputTokens": 197
+  },
+  {
+   "width": 2304,
+   "height": 1536,
+   "outputTokens": 244
+  },
+  {
+   "width": 1152,
+   "height": 912,
+   "outputTokens": 159
+  },
+  {
+   "width": 912,
+   "height": 1152,
+   "outputTokens": 159
+  },
+  {
+   "width": 1600,
+   "height": 1280,
+   "outputTokens": 211
+  },
+  {
+   "width": 1664,
+   "height": 1280,
+   "outputTokens": 199
+  },
+  {
+   "width": 1456,
+   "height": 1120,
+   "outputTokens": 175
+  },
+  {
+   "width": 1536,
+   "height": 1280,
+   "outputTokens": 207
+  }
+ ],
+ "prompts": [
+  {
+   "name": "espanol_natural",
+   "text": "xDiseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. Diseña una lámpara de sobremesa minimalista inspirada en Dieter Rams, con acabado mate, materiales sostenibles y proporciones ergonómicas. ",
+   "textTokens": 256,
+   "settled": false
+  },
+  {
+   "name": "digitos_aleatorios",
+   "text": "x787789328792174218096792908100339075793834701746814538401916146100330766619345145061231007728378326616630494032699102374095461113930955972979262243933283679160110843646974821237899143301467300245892152758929007540091714521178502551716079096690911114656977781880491703179740542938257735643633639532275014217743668759751049049549026730432017185133742078023458889263166277306898575311336148540581075864703160285272887791378848288844693428849736818096080868917121876643772567851369042003230455397179189438606689283838389923525953331232146166823601395518583171008989723213224190271156768563950032675563921805169938954412625856263215471059034453692816873169019134768036014445888689171890626727899067648694584748440039026605609513674308172391096713058215726794965824237184895449993433383000446090138411283577535572117937646252954826591751816997740143914754235551579947847536831550569639568299221740380829406198481514151021633785765552778190650617808501662326253668440741422070970513253939798372462488747658173603268840307573692625248294880292032215498177198840363173086872454618471512167170673491703924684568143361544975761129122236079113021661568232675690695398045354718638541924848359882938390312379655154717239888184259210453952298170622469902367028619625824395002679175699647766191858866050496695491317386071838463158692369111821897043405217786259304075457273340355702838330145462576123413423844581983423421717818009948469124332480220979607021855708488829219637843478399740390972529097687401129893920460",
+   "textTokens": 507,
+   "settled": true
+  },
+  {
+   "name": "alfanum_y_signos_aleatorios",
+   "text": "xE)qV8ib8HDy8)8YtDt!XbiufMdI8X2Y4rUmer.BH3M1;XS(0DRdJuP)nBIKpi99lSi0tcL21pffWQJ;EeNajn(ez0LHtfROUrWW6!Xn;I3EM3H!MRb1OcWrhQ7TTJ,chcVG6MOwUxOVHMWndqN;CIEPx3mnPQC4vkRB5ICpe?yOxJRkSq1L!I7S1L10e0tza9:3Ce6!K)RDiKpFfe:z3gb9pv;MEc?(0goRqG)9hTCzp(pvEJqa,ZgIFI?!2g8Pahqfpgi9el:;,OuOjSXXMUHyQ2pqaWkwfV6)Wf3gV.O116cFB(Ij2C2qdPVHp7p?WnO(na8sEXf?lmWwdRpdo9KMle:?EnmhPxjExF6YGVYS1kW;E0u1!9tZtum.9!4xrIzs:OD(L0IBNcI9WzwUEP9s19A7d9jZf7DEiBGEyHrxeGvfOx2lkplHLeT5RadQQ3W,jA,Yq)OpJj3o4?Gm?VV5LHnR(?o.:ThLxtwV6pnsQ1Mx69Nwinx)YTmIIXgrf9;IF:TQZ5)iT.otImooxy1YqsYy)?vwzGVLd40XON.?M9dyanD,w?6zy?Be;4oKtr7lgdUD;j.(cRPQSrkekRAiz3C,Onf0jzuY.8i(2A,Mc76Z4x6eGUV5?UZCaAHVs6(yuAcvZ;vdrov4,xhcZ5O0egEZfY.dCEmX8yvQoSpgLJ7M,FIdRSOlh3landlcv;e9gy:Qz9R9SeWNYlLx0o;XQ(ZwXTxU14D49SIv;X,ftvc7lmOEhg57QVajyZnRNo5kAEgtsboDKAC:1;O(y7wkfodmzGkn7ZCn,SZ5oL4WAo)a7MjRSy,jU2i!BFShQE34kGBPvAB7(1Vy0908eLcxmdtL;!h8fyAJ,3eS7zKsn4M04jAt,KWVu3N78?)CUKKd7",
+   "textTokens": 637,
+   "settled": true
+  },
+  {
+   "name": "solo_simbolos",
+   "text": "x__./(;&.:~~$[:$<~%!~^,.}_._<!|%&~*{)/!?<.#}(*&].|{;*)!~{![]%,.>&$;,/.{:,/)<$*~%!~|[!/}}:],=/?:{_:[%(%@]$/<#{,_}}*.*}(:$>)$:!{|=&/}>?*~)>?<#|$*.\\,*#{]@_!:|,/[}^(_%[+/+)!*^!))?+<(!${*{@|&^;@\\:#;[/#[//~(\\@{*|}*(<<!%&|%$$\\%\\}]+[~$+!%,[%(^[/$=$!:$<^+,#{+%~*#$#$($+_?@^~_$|&@_<|#\\=)|~;_:;=.}>{}<<(}$<}/+^,?(;=;%(=/%)*/^$!?!{?=%#>~%=#.+>]_:\\,*@}<>})$>?^)}:>_[)>_\\?,;_=\\/)((*%#?:&;);[&({*}$|)<.=%?::}?!@{{<=?,(!&=++^@_:^!<|#{;=+\\<_~(_:_+}_[]#>|$)&~_@?~$@^){(^~~<;)<};_/;/.^})]>#:+&|$((<^#/%?@{~._+~|/%|*$+^:[{>[]({(#[;\\@@},;)@=~)|{[#/])[{>&)^[+@![:~::&>/@%&/|/=<+(_}]:&^>()>$><_?:_),=>=;;:^}!;{=([^|==^%/#}#:",
+   "textTokens": 417,
+   "settled": true
+  },
+  {
+   "name": "cjk_aleatorio",
+   "text": "橍噢竪鰣湈扒睳鲈焲衫恠溈蹈譴梪駂澥鳔軄汣盗綦劶杶敎膤抣齻熛矶縼掙濕岺釮吷齲簍蟽锐邾頾季湂銑麜聶綌濣縘紹韦悶簜硘塪蚜歲撟鳄吮珯透湷疰飽瘄为剓橞愞猾鳚鸔蕓荶辟粚吝廦貃欖鱧叕僚哶乕隗筯瓠宝郴箷鉝檴苤颳璌饧弝栢糠鷜諉才弿俎洭愜螵婃嘦悅炇腳濒佸唯闺竗騟頋蛌鬊遀贕淎挡不厡嗠鈉儺臷旃汫扡啸孭侔鱪钄朿怵苣枉遖鯕軣茦鱼摚輙疙嘩瑯鸟吴謬鋪仐縅藤覍塍蟫摳櫫孹潶殻勷巇磲澳咹瀋齤铢藐郹濵珖槆壯軳俲掻潓永柴扠矖暑翁砎髵沝纑麺銧記詯釫仑兤藶毮需畤椡耞鶲飬埵陘揵悂制共屒宧鶜抶稤性冭凳協德鼢卵嚮叹噪馔粄枃鉖噰缡宵涏桕栁展剕剨鼬夲黖黭狈謒嫈建媆栽现盙礒落潭傭竪滛爬吲紛眐鬎蹺諰狑鴣凷苚凿藝遢媕穣訆吨鋙陵榸妢鞊狀揎藐个鄃柜狨哨于窄賓娿賨斞赎駘穰述潚韼扖牑楻殢跈挸少齹塚賁闗孢鹠矏箄娭腜肂备萈儸綜桢瓍澰蓊鏀踦揦纍麼毥裿帽鈉騋魼剖窛顱矐郈懡螣铠督掳襈蘪滬頢殒帢磂褣汴軼暅瀼璗鴄應懷涰矌鬫郖窟抙氼矾昺漜嬇挑嬂會缮慒惼璫琑薫焌朜导宭燱桬羵襡剗依脓藠橹踏黱珪襌僔怦滬魆臍亴洃蔋靸餰菨歁颸歂攻左蠙蕝瘐潁鹫媆莴洆脷麗戆渁萷诊衃傄鶏艥遖敮矽作翁貳宝勡渨鎌槣抖枓遵窒嫰鞋衷鍀格諤辏倏絙郆秢芆衼棤斆耽迃嶪鲗简龛唿湐焞绠脨嗟侴垟莔菔鹴笒顃濰导檺瓘腂酷樅耫褦椣挏庌囑鼰暹訍闱櫭悸笳苦觪玭鐭帅訕筨歿瀺縥湴蒊旋认乘燾篒浛璢眀譡谑蓘鷊龓壯籤憍瓎罋啍壪附瞏忸釬稭鼋颍俫佸棙圷玀渀鯙嫾頋恅毧旃蟙穘憊梱膄鉫捾鰄鯞妒鐵齻琅权赊楆釱堐蘣峹锌崨濚莣毹忕誓贝镒啻诿觉恼賥涏跄挒",
+   "textTokens": 1151,
+   "settled": false
+  },
+  {
+   "name": "emoji_aleatorio",
+   "text": "🔨🕥🗰🌆🎤👈📟🗈🕀📽🖩🐯📜👿💴💬🖴🍍🎸🖌👱🖋🖖🌝🌕🕰🌮🖺🗲👒😼🍠🔊📯📰😇🎓🌢🏚🗟💩🖀🎁👚🍠🖢👶👝📥😝🔚🔷😕🏗🐢💽👞💰🐁🔷🌵🙎🐨🐫👫🙏📹💝👕🔃🐖🔆👡🏐🖞📸😪🍸👒🏄👄🗚🐲🎂🕘🖊🍙😣🌩💘🗤🔷💟🔮🕋🌲💘🐳🍯🌆🌯🏂🙉📦🕯😐🖡🌽😧🔀🔬🕲💁🕷🎖🖁🖱🗉🗁🕢🖹🍔🏙🌨🖫🖈📔🖀😌🎲🍧🖧🎹🌥💯😙🍧🖟🌍👹🙊🎎😥🐼🔿🗗🐈🐵🎽💯🌣👆🌔💹🕃🖑🕐🌷📽🕅🔖🌨🙌🍹😘😽💯🕍🗈💞📉🍄🌎🖸💌🕠🕞🖣🎟📦😔💦🔱🍨🍔🖓📣🏙🎛🖁🌏💵🌄🌉🖼🖭🍼🍚🏟🍼🎄📣🌒🐚🗠🕆🏸📍🗯🗺🎿🌳👶😘🗽🗚🗇🎔🗫😉🍖🐬🖃🔺🗖📾📗🖭🐄🌵🗞🌠🌋🌾🌏🖚🖿🙄🕹🍑💎🐾🐿🗪🕦🎩📲🕯🌽👃👸🕌🗩📁📡🖵🎪🎔😰🍷👳🖔🎧🖄😵💫📨💊😜😥📏🐖😣😄🕄👕🐫🐞🌾🕼🖚🗐😵🙏🕦👔🕬🗧🌏🎚🕧🐼🕖💶🏼💁💌🖽💁🕨😕🏯😺📎🐢🗁🌁👉🐍🐒💰🎡🕘🙃😍😡🌫🐧🎐😿🕉🎖🐘😰😺🔰🖽😛📿👣🔣🍗🔨🔶📰😰💆🏍😦😀🗣🏯🐼🕭🌺🖵💔📜🗕🏓🐄🕘😁🌉😪💊📖🔩🍙🔥😹👫😖🍀🏮💗🕑🔕🐉🔖👈📨🔆🕛🏎🏁🏙🏄🍞🎹😹🗍🐨👳🕏🕁👯💜😞🔑🎘🏼🌭📹👿🍬👼🖇📚😦",
+   "textTokens": 892,
+   "settled": false
+  },
+  {
+   "name": "latin_extendido_aleatorio",
+   "text": "ȾƂƷɍȏĎǮſɌĚŐĹƾǰžǂȖĴȥſĆŮǐƏŝǇőĤŇȼȼǣŀŃĀĂūŮŔŕƔƠťȔɀŨŝŤǄƘċƸǔŔŊƇġƩƚȴȬāȱƭġƞƵƜǶơŞǶǱŚĝƃċƷǎĉșǖƻǀȨĄǧėŜȿŤļŽǬưȆƵȌƀǬķȭƼƗĒǝĮŪƮȆȸƹŋƮƍȗįƟƢƜŚĨɀŌƞǷŒĘĩȳȑǏĐŹȰưƀǩɍǗŊĜɆĐǼƫŪłȠŃɂǓĶŖǞƾŌĞǗƖňǨȽŖȋǨǹƢǵƌƕǰǎŋĹǁȐśɁǿƭŜĭǻƋȇȘȁƸĠƶȬđƜƺȞƏǸƇƖƮɌśȩąǲȘƀƦƌǭƓȀɋƶƲƌɉưǑƳŘǦƺƫȉňȏŕťƹǴƐĨǕŗȻȩȈǗƚȿțɆƊĎŤőȬǡȿɌŜŰŜɃĕǱųŔěńĸƢŜǷţȘĒǔǮƳǂȹĤȮŨŹƿĀƳǏƎǑĺȘƿĒșȺƚİƗȗȆƭȩƖƴłǖǑȠɈȓƽǯňŐȱǃȠǴťńȷĮƳĀǃķƦȡȺȔňƦɂȠǀǛǝųǼƕǵǂǄőȱȰƅƚǾƀǔĊƣƝǻƒŉǴČľȾǣŽƖĔŅǈĆǵȐȞƌżǲĒŽǺƉŏƒƖǼȷǳȉɊȵļĈŀƙƐȑƬȺƗȏčǭƳƸȮŃĒāƁțǩķȗšćǛǚȰȦɃɌǶǅǳǈŤƗǮġƛāǝȪƒɋǱƟŉŔǴșǾƩȓŎǙȫȕĘģŵƈīĠčƪǛģǏǹęĿľŰȺɊĸńƕǠŌŝȸŞǓŒĢȾŭĖȜķǂĤƏĝȤȦļǌȿńąǝĮơȳǺǺƴɏƿĜņƖōȣɃ",
+   "textTokens": 875,
+   "settled": false
+  },
+  {
+   "name": "astral_no_emoji_aleatorio",
+   "text": "𐚤𐀈𐄍𐞋𐽬𐭖𐲑𐻚𐛦𐙱𐣝𐙯𐦴𐭬𐞺𐮻𐭁𐟱𐇼𐿑𐳓𐬬𐒓𐒒𐞠𐾯𐰵𐄵𐌀𐕭𐲴𐌨𐤁𐙠𐩞𐽄𐼋𐋪𐙞𐰋𐁒𐍐𐗩𐱳𐂶𐨦𐃝𐧼𐱀𐼼𐳅𐹤𐇴𐒱𐵕𐮜𐂥𐚞𐤗𐤪𐉼𐃟𐋊𐭣𐴸𐧑𐁶𐣉𐞀𐉎𐄵𐋓𐦞𐬾𐚮𐽵𐋱𐏟𐞦𐫱𐶍𐲖𐀘𐱼𐰘𐖳𐚡𐩈𐱟𐩟𐍼𐯷𐟷𐌳𐛎𐥧𐧇𐢐𐉾𐕛𐉴𐴷𐗯𐜰𐈁𐴆𐵖𐝢𐶜𐽶𐟑𐦬𐵢𐣻𐊳𐪕𐗽𐵿𐃹𐓆𐎲𐥶𐗢𐷡𐘖𐩯𐍆𐪐𐉰𐇶𐾂𐑨𐉔𐨰𐘏𐻹𐱊𐝔𐽁𐌹𐀌𐘱𐔃𐎒𐋸𐪾𐓜𐯄𐍛𐸝𐩔𐗛𐍎𐮰𐍊𐈐𐙁𐚚𐩟𐯻𐖈𐺭𐊮𐟞𐳧𐻩𐰁𐀮𐏂𐯻𐐿𐀚𐿛𐰱𐫶𐉏𐾳𐥸𐂁𐎽𐽔𐭕𐙀𐫿𐰺𐒈𐥌𐿵𐋕𐎄𐥸𐴏𐫈𐈆𐷖𐆜𐜍𐵶𐞜𐢬𐉙𐒪𐢬𐌒𐽈𐷖𐗁𐱜𐟗𐋰𐹺𐭢𐐠𐊭𐀩𐒁𐮍𐂆𐂮𐠆𐺩𐱀𐊂𐆳𐛾𐘳𐸪𐁣𐼙𐊻𐣮𐼍𐂸𐆲𐔞𐲑𐷩𐄧𐛦𐃃𐵾𐴹𐷕𐰜𐁺𐕔𐫔𐒾𐦱𐘚𐶂𐉴𐯒𐛯𐲘𐵼𐘙𐢫𐑴𐼈𐮡𐤫𐀓𐏲𐕪𐺥𐉶𐉝𐰲𐄦𐴛𐓉𐙉𐂗𐿍𐨪𐺨𐑜𐻻𐞑𐉸𐮬𐃾𐁵𐗩𐶺𐊽𐢈𐐴𐯯𐪱𐛞𐓝𐥦𐋡𐤓𐎍𐍣𐳈𐯿",
+   "textTokens": 1192,
+   "settled": false
+  }
+ ]
+}

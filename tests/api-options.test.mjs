@@ -95,7 +95,7 @@ test('el precio cobrado es exactamente el del núcleo (v.credits)', async () => 
   for (const o of [{ quality: 'xhigh' }, { n: 4 }, { quality: 'max', aspectRatio: '16:9' }, { imageSize: '2K', n: 1 }, { n: 2, format: 'webp' }]) {
     reset();
     await POST(req('generate-image', { prompt: 'x', ...o }));
-    assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions(o, { promptChars: 'x'.length + 400 }).value.credits, JSON.stringify(o));
+    assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions(o, { promptChars: core.promptCostUnits('x') + 400 }).value.credits, JSON.stringify(o));
   }
 });
 
@@ -185,7 +185,7 @@ test('foto de entrada enorme (> 4.194.304 px) → 400 sin cobrar; sin dimensione
 test('las fotos de entrada se cobran por sus píxeles reales', async () => {
   reset();
   await POST(req('generate-image', { prompt: 'x', images: [{ role: 'dish', data: pngOf(1280, 960) }, { role: 'plate', data: pngOf(1280, 960) }] }));
-  assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions({}, { promptChars: 'x'.length + 400, inputImagePixels: [1280 * 960, 1280 * 960] }).value.credits);
+  assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions({}, { promptChars: core.promptCostUnits('x') + 400, inputImagePixels: [1280 * 960, 1280 * 960] }).value.credits);
   assert.equal(rpcBody('consume_credits').p_meta.inputs, 2);
 });
 

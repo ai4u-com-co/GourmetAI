@@ -11,6 +11,9 @@
 //   · tokens de salida (low): 107 a 1024x640 · 110 a 1360x768 · 158 a 1536x1024 · 205 a 2560x1440 · y CUADRADOS más caros: 196 a 1024², 364 a 1920².
 //     medium ×2,25 · high ×8,95 · xhigh ×15,9 · max ×35,7 (iguales en todos los tamaños). Sunburst y Flare consumen LOS MISMOS tokens; Flare es más rápido.
 //   · tokens de ENTRADA: imagen ≈ píxeles/1024 entre 640 y 1536 (4000x3000 → 1452); el texto del prompt cuenta (US$5/M).
+// Revisión de cobro del 5-nov-2026 (hallazgos de seguridad sobre subcobro; ~45 llamadas reales a calidad low): la banda de ratio 1,25–1,6 y el
+// texto no latino/emoji se cobraban por DEBAJO de lo real. El precio previo es una ESTIMACIÓN; la verdad la fija `creditsFromUsage` al terminar. Los puntos medidos están en `tests/fixtures/` y las pruebas fallan si el cobro
+// vuelve a quedar por debajo de ellos (`tests/pricing.test.mjs`).
 
 export const IMAGE_MODELS = { sunburst: 'gpt-image-2.5-sunburst', flare: 'gpt-image-2.5-flare' } as const;
 export type ImageModelKey = keyof typeof IMAGE_MODELS;
@@ -41,7 +44,25 @@ export const MAX_N = 4;
 // ── Calibración MEDIDA con la API real (4-nov-2026; sunburst y flare idénticos; cada punto es una llamada real) ──
 // Tokens de SALIDA a calidad low: DEPENDEN DEL TAMAÑO Y DE LA FORMA (los cuadrados cuestan más que los apaisados de igual área).
 const LOW_SQUARE: [number, number][] = [[1_048_576, 196], [1_327_104, 213], [2_359_296, 279], [2_768_896, 306], [3_686_400, 364]]; // 1024²…1920²
-const LOW_WIDE: [number, number][] = [[655_360, 107], [921_600, 106], [1_044_480, 110], [1_572_864, 158], [2_359_296, 157], [3_686_400, 205]]; // 1024x640…2560x1440
+// Apaisados (ratio ≥ 1,6; 1024x640 = 1,6): 1024x640 · 1280x720 · 1360x768 · 2048x1152 · 2560x1440 (+ 1536x1024 = 158 como ancla conservadora). Los verticales cuestan igual que su apaisado.
+const LOW_WIDE: [number, number][] = [[655_360, 107], [921_600, 106], [1_044_480, 110], [1_572_864, 158], [2_359_296, 157], [3_686_400, 205]];
+// Ratio 1,25–1,6 (5-nov-2026, llamadas reales; deterministas: 1792x1280 dio 189 dos veces). Puntos (píxeles → tokens): 1024x768 134 · 1152x864 144 · 1152x912 159 ·
+// 1280x960 155 · 1280x1024 173 · 1408x1024 166 · 1456x1120 175 · 1536x1152 181 · 1600x1120 167 · 1680x1120 171 · 1664x1152 173 · 1600x1280 211 · 1664x1280 199 ·
+// 1792x1280 189 · 1920x1280 197 · 2048x1408 215 · 2048x1360 211 · 2304x1536 244. NO es monótona: por eso `envelope` cobra siempre el máximo visto hasta ese tamaño.
+const LOW_MID: [number, number][] = [
+  [786_432, 134], [995_328, 144], [1_050_624, 159], [1_228_800, 155], [1_310_720, 173], [1_441_792, 166], [1_572_864, 158], [1_630_720, 175],
+  [1_769_472, 181], [1_792_000, 167], [1_881_600, 171], [1_916_928, 173], [2_048_000, 211], [2_129_920, 199], [2_293_760, 189], [2_457_600, 197],
+  [2_785_280, 211], [2_883_584, 215], [3_538_944, 244],
+];
+// Ratios 2,3–3 (2048x896 → 108 · 2560x1024 → 111 · 1920x640 → 65) salen MÁS baratos que la curva apaisada: esa curva ya los cubre.
+/** Envolvente monótona: ningún tamaño cuesta menos que uno más pequeño de la tabla (la API no es monótona entre puntos). */
+const envelope = (t: [number, number][]): [number, number][] => { let m = 0; return t.map(([x, y]) => [x, (m = Math.max(m, y))]); };
+const WIDE_CURVE = envelope(LOW_WIDE);
+const MID_CURVE = envelope(LOW_MID);
+/** Ratio por debajo del cual se cobra la curva CUADRADA (la más cara; 1,0–1,25 no se midió) y desde el cual rige la de 1,25–1,6. */
+export const MID_MIN_RATIO = 1.25;
+/** Ratio desde el cual rige la curva apaisada: entre 1,5 y 1,6 los tamaños grandes cuestan como la banda 1,25–1,6 (2304x1536 = 244, no 205). */
+export const WIDE_MIN_RATIO = 1.6;
 /** Multiplicador sobre low (idéntico en todos los tamaños probados: medium 439/196 y 256/110; high 1756/196 y 987/110; xhigh y max a 1024x640). */
 const QUALITY_MULT: Record<ImageQualityKey, number> = { low: 1, medium: 2.25, high: 8.95, xhigh: 15.9, max: 35.7 };
 /** Precios por millón de tokens (US$): salida de imagen 30, entrada de imagen 8, entrada de texto 5. */
@@ -54,13 +75,28 @@ export function inputImageTokens(pixels: number): number {
   if (pixels < 655_360) return 1024;
   return Math.min(MAX_INPUT_IMAGE_TOKENS, Math.ceil(pixels / 1024));
 }
+/** Tokens de texto de una cantidad de «unidades de prompt» (1 token = 3 unidades). Ver `promptCostUnits`. */
+export const textTokens = (units: number): number => Math.ceil(Math.max(0, units) / 3);
 /**
- * Tokens de texto de un prompt: 1 por cada 3 BYTES UTF-8 (cota conservadora: el inglés ronda 4 bytes/token, el español ~3 y los
- * alfabetos no latinos o los emojis usan varios bytes por carácter). El servidor pasa `Buffer.byteLength(prompt)`.
+ * ESTIMACIÓN (previa al cobro) de los tokens de texto de un prompt, por clase de carácter. Medido con la API real (5-nov-2026, `text_tokens`):
+ * español natural 0,22 tokens/carácter · dígitos aleatorios 0,34 · letras/dígitos/signos aleatorios 0,67–0,71 · CJK 1,92 · emojis 2,23 ·
+ * Latin Extendido 1,75 · astrales no emoji 3,97. Por eso: ASCII alfanumérico y espacios 0,3 · signos ASCII 0,75 · cualquier carácter NO ASCII = sus
+ * bytes UTF-8 (2, 3 o 4; un token nunca cubre menos de un byte, así que es cota). El texto ASCII ALEATORIO sí puede costar más que esta estimación:
+ * eso lo corrige `creditsFromUsage` al liquidar con el uso real que devuelve OpenAI (ver `api/generate.ts`), no esta función.
  */
-export const textTokens = (bytes: number): number => Math.ceil(Math.max(0, bytes) / 3);
-/** Tamaño de prompt (bytes) que se asume SOLO al ESTIMAR en el navegador (`estimate: true`) antes de que exista el prompt final. */
-export const DEFAULT_PROMPT_CHARS = 1000;
+export function promptTokens(prompt: string): number {
+  let t = 0;
+  for (const ch of prompt) {
+    const c = ch.codePointAt(0) as number;
+    if (c < 128) t += (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 32 || c === 10 || c === 13 || c === 9 ? 0.3 : 0.75;
+    else t += c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+  return t;
+}
+/** «Unidades de prompt» para `promptChars`/`textTokens` (3 por token): lo que el servidor y el navegador pasan en vez de bytes. */
+export const promptCostUnits = (prompt: string): number => Math.ceil(promptTokens(prompt) * 3);
+/** Unidades de prompt que se asumen SOLO al ESTIMAR en el navegador (`estimate: true`) antes de que exista el prompt final (≈ el prompt típico del builder: ~1100 caracteres). */
+export const DEFAULT_PROMPT_CHARS = 1100;
 /** Tope de bytes de prompt que acepta el núcleo (los servidores ya acotan el suyo bastante por debajo). */
 export const MAX_PROMPT_BYTES = 200_000;
 /** Tope por imagen de entrada (2048x2048). El servidor lee las dimensiones REALES: no confía en que el navegador las reduzca. */
@@ -145,11 +181,18 @@ function interpolate(table: [number, number][], px: number, belowScale: number):
   return table[table.length - 1][1];
 }
 
-/** Tokens de salida de UNA imagen: curva de low según la forma (ratio < 1,4 → cuadrada, más cara) × multiplicador de calidad. */
+/**
+ * Tokens de salida de UNA imagen: curva de low según la forma × multiplicador de calidad. Tres tramos por ratio (el mayor lado entre el menor):
+ * < 1,25 cuadrada (la más cara) · 1,25–1,6 la medida en esa banda · ≥ 1,6 apaisada. Fuera del rango MEDIDO de un tramo se cae a la curva
+ * cuadrada, que siempre cobra de más. Todas las curvas son envolventes monótonas: nunca se cobra menos que el máximo medido hasta ese tamaño.
+ */
 export function estimateOutputTokens(quality: ImageQualityKey, width: number, height: number): number {
   const px = width * height;
-  const squareish = Math.max(width, height) / Math.min(width, height) < 1.4;
-  const low = squareish ? interpolate(LOW_SQUARE, px, 0.5) : interpolate(LOW_WIDE, px, 0);
+  const ratio = Math.max(width, height) / Math.min(width, height);
+  const square = interpolate(LOW_SQUARE, px, 0.5);
+  let low = square;
+  if (ratio >= WIDE_MIN_RATIO) low = interpolate(WIDE_CURVE, px, 0);
+  else if (ratio >= MID_MIN_RATIO && px >= MID_CURVE[0][0] && px <= MID_CURVE[MID_CURVE.length - 1][0]) low = Math.min(square, interpolate(MID_CURVE, px, 0));
   return Math.round(low * QUALITY_MULT[quality]);
 }
 
@@ -394,6 +437,20 @@ export const wantsAdmin = (raw: unknown): boolean => !!raw && typeof raw === 'ob
 export const mimeFor = (f: ImageFormat) => (f === 'jpeg' ? 'image/jpeg' : f === 'webp' ? 'image/webp' : 'image/png');
 
 /** Uso real de la respuesta de OpenAI, listo para `core.record_usage` (solo números; ≤ 2 KB). */
+/** US$ reales de una llamada según el `usage` que devuelve OpenAI (todo el lote: n imágenes). 0 si no hay uso utilizable. */
+export function usdFromUsage(usage: any): number {
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0);
+  const out = num(usage?.output_tokens);
+  const inImg = num(usage?.input_tokens_details?.image_tokens);
+  const inTxt = num(usage?.input_tokens_details?.text_tokens);
+  return out * USD_PER_TOKEN.imageOut + inImg * USD_PER_TOKEN.imageIn + inTxt * USD_PER_TOKEN.textIn;
+}
+/** Créditos reales de una llamada (misma regla de redondeo que `creditsFor`). 0 si OpenAI no devolvió uso: ahí se queda lo cobrado. */
+export function creditsFromUsage(usage: any): number {
+  const usd = usdFromUsage(usage);
+  return usd > 0 ? Math.max(1, Math.ceil(usd / USD_PER_CREDIT - 0.1)) : 0;
+}
+
 export function usageForLog(usage: any, extra: Record<string, number | string> = {}): Record<string, number | string> {
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
   return {
