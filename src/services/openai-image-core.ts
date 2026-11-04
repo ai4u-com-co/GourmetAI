@@ -8,9 +8,9 @@
 //   · aceptados: model sunburst|flare, quality low|medium|high|xhigh|max|auto, output_format jpeg|webp|png,
 //     output_compression, background transparent (webp/png), n, moderation low, safety_identifier, size 1920x1920.
 //   · rechazados: input_fidelity (unknown_parameter), ratio > 3:1 (invalid_value).
-//   · tokens de salida a 655.360 px: low 107 · medium 239 · high 956 · xhigh 1700 · max 3824; a 3.686.400 px (low): 364
-//     → el costo crece con (píxeles)^0,71. Sunburst y Flare consumen LOS MISMOS tokens; Flare es más rápido.
-//   · tokens de ENTRADA: cada imagen de referencia ≈ píxeles/1024 (1024x640 → 640).
+//   · tokens de salida (low): 107 a 1024x640 · 110 a 1360x768 · 158 a 1536x1024 · 205 a 2560x1440 · y CUADRADOS más caros: 196 a 1024², 364 a 1920².
+//     medium ×2,25 · high ×8,95 · xhigh ×15,9 · max ×35,7 (iguales en todos los tamaños). Sunburst y Flare consumen LOS MISMOS tokens; Flare es más rápido.
+//   · tokens de ENTRADA: imagen ≈ píxeles/1024 entre 640 y 1536 (4000x3000 → 1452); el texto del prompt cuenta (US$5/M).
 
 export const IMAGE_MODELS = { sunburst: 'gpt-image-2.5-sunburst', flare: 'gpt-image-2.5-flare' } as const;
 export type ImageModelKey = keyof typeof IMAGE_MODELS;
@@ -38,23 +38,28 @@ export const MAX_EDGE = 3840;
 export const MAX_RATIO = 3;
 export const MAX_N = 4;
 
-// Tokens de salida medidos a 655.360 px (sunburst y flare idénticos) y exponente de escala por píxeles.
-const BASE_TOKENS: Record<ImageQualityKey, number> = { low: 107, medium: 239, high: 956, xhigh: 1700, max: 3824 };
-const PIXEL_EXPONENT = 0.71;
-/** 1 crédito = 150 tokens de salida ≈ US$0,0045 (a US$30 por millón). low a ~1 MP = 1 crédito. */
-export const TOKENS_PER_CREDIT = 150;
-/** Tokens de ENTRADA de una imagen ≈ píxeles/1024 (medido: 1024x640 → 640). Se pagan a US$8/M frente a US$30/M de la salida. */
-export const INPUT_TOKENS_PER_PIXEL = 1 / 1024;
-export const INPUT_TO_OUTPUT_PRICE = 8 / 30;
+// ── Calibración MEDIDA con la API real (4-nov-2026; sunburst y flare idénticos; cada punto es una llamada real) ──
+// Tokens de SALIDA a calidad low: DEPENDEN DEL TAMAÑO Y DE LA FORMA (los cuadrados cuestan más que los apaisados de igual área).
+const LOW_SQUARE: [number, number][] = [[1_048_576, 196], [1_327_104, 213], [2_359_296, 279], [2_768_896, 306], [3_686_400, 364]]; // 1024²…1920²
+const LOW_WIDE: [number, number][] = [[655_360, 107], [921_600, 106], [1_044_480, 110], [1_572_864, 158], [2_359_296, 157], [3_686_400, 205]]; // 1024x640…2560x1440
+/** Multiplicador sobre low (idéntico en todos los tamaños probados: medium 439/196 y 256/110; high 1756/196 y 987/110; xhigh y max a 1024x640). */
+const QUALITY_MULT: Record<ImageQualityKey, number> = { low: 1, medium: 2.25, high: 8.95, xhigh: 15.9, max: 35.7 };
+/** Precios por millón de tokens (US$): salida de imagen 30, entrada de imagen 8, entrada de texto 5. */
+export const USD_PER_TOKEN = { imageOut: 30 / 1e6, imageIn: 8 / 1e6, textIn: 5 / 1e6 } as const;
+/** 1 crédito = US$0,0045 (150 tokens de salida de imagen). */
+export const USD_PER_CREDIT = 0.0045;
+/** Imágenes de ENTRADA: ≈ píxeles/1024 tokens entre 640 y 1536; OpenAI las escala (4000x3000 → 1452; 512² → 1024; 1024x640 → 640). */
+export const MAX_INPUT_IMAGE_TOKENS = 1536;
+export function inputImageTokens(pixels: number): number {
+  if (pixels < 655_360) return 1024;
+  return Math.min(MAX_INPUT_IMAGE_TOKENS, Math.ceil(pixels / 1024));
+}
+/** Tokens de texto de un prompt (≈ 1 por 3,5 caracteres; el inglés es ~4, el español ~3). */
+export const textTokens = (chars: number): number => Math.ceil(Math.max(0, chars) / 3.5);
+/** Largo de prompt que se asume al ESTIMAR en el navegador antes de que exista el prompt final (el servidor usa el real). */
+export const DEFAULT_PROMPT_CHARS = 1000;
 /** Tope por imagen de entrada (2048x2048). El servidor lee las dimensiones REALES: no confía en que el navegador las reduzca. */
 export const MAX_INPUT_IMAGE_PIXELS = 4_194_304;
-
-/** Créditos de las imágenes de entrada: tokens equivalentes a salida de TODAS juntas, redondeado hacia arriba (mínimo 1 si hay alguna). */
-export function inputCredits(pixelsList: number[]): number {
-  if (pixelsList.length === 0) return 0;
-  const equivalent = pixelsList.reduce((sum, px) => sum + px * INPUT_TOKENS_PER_PIXEL * INPUT_TO_OUTPUT_PRICE, 0);
-  return Math.max(1, Math.ceil(equivalent / TOKENS_PER_CREDIT));
-}
 
 /** Margen de la respuesta de una función de Vercel (4,5 MB): bytes por píxel típicos y base64 = ×4/3. */
 const BYTES_PER_PIXEL: Record<string, number> = { jpeg: 0.5, webp: 0.35, 'webp-alpha': 0.75, png: 1.6, 'png-alpha': 1.6 };
@@ -123,14 +128,48 @@ export function validateCustomSize(width: number, height: number): string | null
   return null;
 }
 
-export function estimateOutputTokens(quality: ImageQualityKey, pixels: number): number {
-  return Math.round(BASE_TOKENS[quality] * Math.pow(pixels / MIN_PIXELS, PIXEL_EXPONENT));
+function interpolate(table: [number, number][], px: number, belowScale: number): number {
+  if (px <= table[0][0]) return table[0][1] * Math.pow(px / table[0][0], belowScale);
+  for (let i = 1; i < table.length; i++) {
+    if (px <= table[i][0]) {
+      const [x0, y0] = table[i - 1];
+      const [x1, y1] = table[i];
+      return y0 + ((y1 - y0) * (px - x0)) / (x1 - x0);
+    }
+  }
+  return table[table.length - 1][1];
 }
 
-/** Créditos de una generación: n × ceil(tokens de salida / 150) (mínimo 1 por imagen) + las imágenes de entrada por sus píxeles reales. */
-export function creditsFor(quality: ImageQualityKey, pixels: number, n: number, inputPixels: number[] = []): number {
-  const perImage = Math.max(1, Math.ceil(estimateOutputTokens(quality, pixels) / TOKENS_PER_CREDIT));
-  return perImage * n + inputCredits(inputPixels);
+/** Tokens de salida de UNA imagen: curva de low según la forma (ratio < 1,4 → cuadrada, más cara) × multiplicador de calidad. */
+export function estimateOutputTokens(quality: ImageQualityKey, width: number, height: number): number {
+  const px = width * height;
+  const squareish = Math.max(width, height) / Math.min(width, height) < 1.4;
+  const low = squareish ? interpolate(LOW_SQUARE, px, 0.5) : interpolate(LOW_WIDE, px, 0);
+  return Math.round(low * QUALITY_MULT[quality]);
+}
+
+export interface CostInput {
+  quality: ImageQualityKey;
+  width: number;
+  height: number;
+  n: number;
+  /** píxeles REALES de cada imagen de entrada (incluida la máscara) */
+  inputPixels?: number[];
+  /** largo del prompt de texto que viaja a OpenAI (las imágenes y el texto de entrada se cobran por cada variante) */
+  promptChars?: number;
+}
+
+/** Costo en US$ de una generación, con los precios por token de OpenAI (todo ×n: la API cobra la entrada por cada variante). */
+export function estimateUsd(c: CostInput): number {
+  const out = estimateOutputTokens(c.quality, c.width, c.height) * USD_PER_TOKEN.imageOut;
+  const inImg = (c.inputPixels ?? []).reduce((sum, px) => sum + inputImageTokens(px), 0) * USD_PER_TOKEN.imageIn;
+  const inTxt = textTokens(c.promptChars ?? DEFAULT_PROMPT_CHARS) * USD_PER_TOKEN.textIn;
+  return (out + inImg + inTxt) * c.n;
+}
+
+/** Créditos de una generación: US$ / US$0,0045, redondeado hacia arriba con 0,1 de tolerancia (mínimo 1). */
+export function creditsFor(c: CostInput): number {
+  return Math.max(1, Math.ceil(estimateUsd(c) / USD_PER_CREDIT - 0.1));
 }
 
 /** Una imagen de entrada no puede pasar de ~1,5 MB (2.000.000 caracteres base64); el servidor ya lo impone, el lector también. */
@@ -249,11 +288,12 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
  * Forma aceptada (todas las claves opcionales):
  *   { model: 'sunburst'|'flare', quality, aspectRatio, imageSize: '1K'|'2K'|'custom', size: 'WxH' (con imageSize 'custom'),
  *     format, compression, background, n, moderation }
- * ctx: `inputImagePixels` = píxeles REALES (ancho×alto, leídos con `dataUrlDimensions`) de cada imagen de entrada; `isAdmin` = rol
+ * ctx: `promptChars` = largo del prompt que viaja a OpenAI (el servidor pasa el real; sin él se asumen ~1.000 caracteres);
+ * `inputImagePixels` = píxeles REALES (ancho×alto, leídos con `dataUrlDimensions`) de cada imagen de entrada; `isAdmin` = rol
  * verificado en el servidor (solo así se acepta moderation: 'low').
  * Nunca lanza: devuelve { ok:false, code, message } con un mensaje listo para mostrar.
  */
-export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: number[]; isAdmin?: boolean } = {}): Resolved {
+export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: number[]; isAdmin?: boolean; promptChars?: number } = {}): Resolved {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const inputPixels = ctx.inputImagePixels ?? [];
   if (!Array.isArray(inputPixels) || inputPixels.some((p) => typeof p !== 'number' || !Number.isFinite(p) || p < 1 || p > MAX_INPUT_IMAGE_PIXELS)) {
@@ -327,8 +367,8 @@ export function resolveImageOptions(raw: unknown, ctx: { inputImagePixels?: numb
       background: background as ImageBackground,
       moderation: moderation as 'auto' | 'low',
       n,
-      credits: creditsFor(q, pixels, n, inputPixels),
-      estimatedOutputTokens: estimateOutputTokens(q, pixels) * n,
+      credits: creditsFor({ quality: q, width, height, n, inputPixels, promptChars: ctx.promptChars }),
+      estimatedOutputTokens: estimateOutputTokens(q, width, height) * n,
       adminOnly: moderation === 'low',
     },
   };

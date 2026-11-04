@@ -95,7 +95,7 @@ test('el precio cobrado es exactamente el del núcleo (v.credits)', async () => 
   for (const o of [{ quality: 'xhigh' }, { n: 4 }, { quality: 'max', aspectRatio: '16:9' }, { imageSize: '2K', n: 1 }, { n: 2, format: 'webp' }]) {
     reset();
     await POST(req('generate-image', { prompt: 'x', ...o }));
-    assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions(o).value.credits, JSON.stringify(o));
+    assert.equal(rpcBody('consume_credits').p_amount, core.resolveImageOptions(o, { promptChars: 'x'.length + 400 }).value.credits, JSON.stringify(o));
   }
 });
 
@@ -224,7 +224,7 @@ test('el log de éxito trae tokens, calidad, tamaño y el id de OpenAI, sin la i
   reset({ openai: [{ status: 200, body: { data: [{ b64_json: 'QUJD' }], usage: { input_tokens: 1, output_tokens: 9 } } }] });
   const { lines } = await captureLogs(() => POST(req('generate-image', { prompt: 'x' })));
   const ok = appLogs(lines).find((l) => l.event === 'ok');
-  assert.ok(ok && ok.tokens_out === 9 && ok.quality === 'low' && ok.size === '1024x1024' && ok.credits === 1 && ok.oai_rid === 'req_oai_123');
+  assert.ok(ok && ok.tokens_out === 9 && ok.quality === 'low' && ok.size === '1024x1024' && ok.credits === 2 && ok.oai_rid === 'req_oai_123');
   assert.ok(!lines.join('\n').includes('QUJD'));
 });
 

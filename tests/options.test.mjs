@@ -12,10 +12,10 @@ const base = {
   aspectRatio: '1:1', efectoVapor: 'sin-vapor', efectoFrescura: 'sin-efecto', props: ['copa'], tableImage: 'x', restaurantImage: 'x', plateImage: 'x',
 };
 
-test('sin opciones: lo más económico (sunburst, low, 1K, jpeg, auto, 1) y costo 1', () => {
+test('sin opciones: lo más económico (sunburst, low, 1K, jpeg, auto, 1) y costo 2', () => {
   const o = opt.imageRequestOptions({ ...base });
   assert.deepEqual([o.model, o.quality, o.imageSize, o.format, o.background, o.n], ['sunburst', 'low', '1K', 'jpeg', 'auto', 1]);
-  assert.equal(opt.estimateImage(base, [], false).value.credits, 1);
+  assert.equal(opt.estimateImage(base, [], false).value.credits, 2);
   assert.ok(opt.isCheapest(base));
 });
 
