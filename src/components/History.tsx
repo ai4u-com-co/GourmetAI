@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, Grid, Card, CardMedia, IconButton, Dialog, DialogTitle, DialogContent, Button, Divider } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import { getHistory, deleteFromHistory, clearHistory } from '../utils/historyService';
+import { getHistory, deleteFromHistory, clearHistory, legacyHistoryCount, importLegacyHistory, discardLegacyHistory } from '../utils/historyService';
 import { HistoryItem } from '../types';
 
 const History: React.FC = () => {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
+  const [legacy, setLegacy] = useState<number>(() => legacyHistoryCount());
 
   useEffect(() => {
     loadHistory();
@@ -23,6 +24,29 @@ const History: React.FC = () => {
     loadHistory();
   };
 
+  const handleImportLegacy = () => {
+    importLegacyHistory();
+    setLegacy(0);
+    loadHistory();
+  };
+
+  const handleDiscardLegacy = () => {
+    if (window.confirm('¿Descartar para siempre las creaciones anteriores de este dispositivo?')) {
+      discardLegacyHistory();
+      setLegacy(0);
+    }
+  };
+
+  const legacyBanner = legacy > 0 && (
+    <Box sx={{ p: 2, mb: 2, border: 1, borderColor: 'divider' }}>
+      <Typography variant="body2" sx={{ mb: 1 }}>
+        Encontramos {legacy} creaciones anteriores guardadas en este dispositivo. ¿Las importas a tu cuenta?
+      </Typography>
+      <Button size="small" variant="contained" onClick={handleImportLegacy} sx={{ mr: 1 }}>Importar a mi cuenta</Button>
+      <Button size="small" onClick={handleDiscardLegacy}>Ahora no</Button>
+    </Box>
+  );
+
   const handleClear = () => {
     if (window.confirm('¿Estás seguro de que quieres borrar todo el historial?')) {
       clearHistory();
@@ -33,6 +57,7 @@ const History: React.FC = () => {
   if (history.length === 0) {
     return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
+        {legacyBanner}
         <Typography variant="body1" color="text.secondary">
           No tienes creaciones guardadas todavía.
         </Typography>
@@ -42,6 +67,7 @@ const History: React.FC = () => {
 
   return (
     <Box sx={{ py: 2 }}>
+      {legacyBanner}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6" fontWeight="bold">Tus Creaciones</Typography>
         <Button size="small" color="error" onClick={handleClear}>Borrar Todo</Button>

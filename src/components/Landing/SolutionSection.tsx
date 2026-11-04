@@ -8,7 +8,7 @@ const SolutionSection: React.FC = () => {
   const theme = useTheme();
 
   return (
-    <SectionWrapper bgcolor="background.paper">
+    <SectionWrapper bgcolor="background.paper" sx={{ overflowX: 'clip' }}>
       <Grid container spacing={8} alignItems="center">
         <Grid item xs={12} md={6}>
           <Box sx={{ position: 'relative' }}>

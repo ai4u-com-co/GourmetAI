@@ -1,13 +1,13 @@
 import React, { useState, useEffect, ReactNode } from 'react';
-import { Box, Container, Typography, AppBar, Toolbar, IconButton, useTheme, alpha, Slide, useScrollTrigger, Button, TextField, InputAdornment } from '@mui/material';
+import { Box, Container, Typography, AppBar, Toolbar, IconButton, useTheme, alpha, Slide, useScrollTrigger, Button, Chip } from '@mui/material';
 import { useLocation, useNavigate, Link as RouterLink } from 'react-router-dom';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
-import KeyIcon from '@mui/icons-material/Key';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useColorMode } from '../context/ThemeContext';
-import { useApi } from '../context/ApiContext';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import { useAuthContext } from '../context/AuthContext';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 interface HideOnScrollProps {
   children: React.ReactElement;
@@ -33,16 +33,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { toggleColorMode, mode } = useColorMode();
-  const { apiKey, setApiKey } = useApi();
+  const { state, credits, isAdmin, email, signOut } = useAuthContext();
+  const { canInstall, install } = useInstallPrompt();
   const [scrolled, setScrolled] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [localApiKey, setLocalApiKey] = useState(apiKey);
 
   const isPlatform = location.pathname === '/app';
-
-  useEffect(() => {
-    setLocalApiKey(apiKey);
-  }, [apiKey]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -51,18 +46,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalApiKey(e.target.value);
-  };
-
-  const handleApiKeyBlur = () => {
-    setApiKey(localApiKey);
-  };
-
-  const toggleShowApiKey = () => {
-    setShowApiKey(!showApiKey);
-  };
 
   return (
     <Box 
@@ -109,47 +92,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </Box>
 
             {/* Navigation Actions */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 2 } }}>
               {isPlatform ? (
-                <TextField
-                  size="small"
-                  type={showApiKey ? 'text' : 'password'}
-                  placeholder="Gemini API Key"
-                  value={localApiKey}
-                  onChange={handleApiKeyChange}
-                  onBlur={handleApiKeyBlur}
-                  variant="outlined"
-                  sx={{
-                    width: { xs: '150px', sm: '250px' },
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '20px',
-                      backgroundColor: alpha(theme.palette.background.paper, 0.1),
-                      color: scrolled ? 'text.primary' : (mode === 'dark' ? 'text.primary' : theme.palette.common.black),
-                      '& fieldset': {
-                        borderColor: alpha(scrolled ? theme.palette.text.primary : (mode === 'dark' ? theme.palette.text.primary : theme.palette.common.black), 0.2),
-                      },
-                    },
-                  }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <KeyIcon fontSize="small" sx={{ color: 'inherit', opacity: 0.7 }} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          onClick={toggleShowApiKey}
-                          onMouseDown={(e) => e.preventDefault()}
-                          sx={{ color: 'inherit', opacity: 0.7 }}
-                        >
-                          {showApiKey ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
+                state === 'ready' ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Chip
+                      label={isAdmin ? 'Admin · sin costo' : `${credits} ${credits === 1 ? 'crédito' : 'créditos'}`}
+                      color={!isAdmin && credits <= 0 ? 'error' : 'default'}
+                      variant="outlined"
+                      title={email ?? undefined}
+                      sx={{ fontWeight: 600 }}
+                    />
+                    <IconButton onClick={signOut} aria-label="Cerrar sesión" title="Cerrar sesión" color="inherit" sx={{ width: 44, height: 44 }}>
+                      <LogoutIcon />
+                    </IconButton>
+                  </Box>
+                ) : null
               ) : (
                 <Button 
                   variant="contained" 
@@ -165,6 +123,28 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   Entrar a la Plataforma
                 </Button>
+              )}
+              {canInstall && (
+                <>
+                  <IconButton
+                    onClick={install}
+                    color="inherit"
+                    aria-label="Instalar app"
+                    title="Instalar app"
+                    sx={{ display: { xs: 'inline-flex', sm: 'none' }, width: 44, height: 44, border: `1px solid ${alpha(theme.palette.text.primary, 0.2)}` }}
+                  >
+                    <GetAppIcon />
+                  </IconButton>
+                  <Button
+                    onClick={install}
+                    startIcon={<GetAppIcon />}
+                    color="inherit"
+                    variant="outlined"
+                    sx={{ display: { xs: 'none', sm: 'inline-flex' }, borderRadius: '20px', minHeight: 44, fontWeight: 700, whiteSpace: 'nowrap' }}
+                  >
+                    Instalar app
+                  </Button>
+                </>
               )}
               <IconButton 
                 onClick={toggleColorMode} 

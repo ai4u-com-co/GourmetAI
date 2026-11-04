@@ -18,6 +18,7 @@ export interface DishParameters {
   saturacion?: string;
   texturaFondo?: string;
   imageSize?: string;
+  quality?: string; // low | medium | high — define cuántos créditos cuesta la imagen
   numberOfImages?: number;
   cuisineType?: string[];
   dishCategory?: string[];

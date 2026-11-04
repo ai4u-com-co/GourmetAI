@@ -1,48 +1,10 @@
-import axios from 'axios';
 import { DishParameters } from '../types';
 
-// Base URL del backend - detectar automáticamente el entorno
-const getApiBaseUrl = (): string => {
-  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
-  if (process.env.NODE_ENV === 'development') return 'http://localhost:3001';
-  return ''; // En producción usa rutas relativas
-};
+// Prompts de imagen y de receta (tal como estaban en el servicio anterior). Las fotos de referencia viajan aparte:
+// el servidor las rotula por rol; aquí solo va el texto.
 
-const API_BASE_URL = getApiBaseUrl();
-
-/**
- * Analiza una imagen y detecta ingredientes usando el backend
- * @param {string} imageBase64 - Imagen en base64
- * @param {string} apiKey - API Key de Gemini (opcional, enviada en headers)
- * @returns {Promise<string>} - Lista de ingredientes detectados
- */
-export const analyzeImage = async (imageBase64: string, apiKey?: string): Promise<string> => {
-  try {
-    const url = `${API_BASE_URL}/api/analyze-image`;
-    const headers: Record<string, string> = {};
-    if (apiKey) headers['x-gemini-key'] = apiKey;
-    
-    const response = await axios.post(url, { image: imageBase64 }, { headers });
-    
-    if (response.data && response.data.success) {
-      return response.data.ingredients;
-    } else {
-      throw new Error(response.data.error || 'Error analizando imagen');
-    }
-  } catch (error: any) {
-    console.error('Error analizando imagen via backend:', error);
-    const errorData = error.response?.data;
-    const errorMessage = errorData?.error 
-      ? (typeof errorData.error === 'object' ? JSON.stringify(errorData.error) : errorData.error)
-      : (errorData?.message || error.message || 'Error al analizar la imagen');
-    throw new Error(errorMessage);
-  }
-};
-
-/**
- * Construye el prompt dinámico basado en los parámetros
- */
-const buildPrompt = (parameters: DishParameters, input: string, isFromScratch: boolean = false): string => {
+/** Construye el prompt dinámico de imagen según los parámetros */
+export const buildPrompt = (parameters: DishParameters, input: string, isFromScratch: boolean = false): string => {
   const {
     intensidadGourmet,
     estiloPlato,
@@ -286,97 +248,8 @@ RESULT: International magazine level food photography (like Michelin Guide or Bo
   return prompt;
 };
 
-/**
- * Genera variantes gourmet a través del backend
- */
-export const generateGourmetVariants = async (
-  imageBase64: string, 
-  parameters: DishParameters, 
-  ingredients: string,
-  apiKey?: string
-): Promise<string[]> => {
-  try {
-    const prompt = buildPrompt(parameters, ingredients, false);
-    const url = `${API_BASE_URL}/api/generate-image`;
-    const headers: Record<string, string> = {};
-    if (apiKey) headers['x-gemini-key'] = apiKey;
-    
-    const response = await axios.post(url, {
-      prompt,
-      image: imageBase64,
-      plateImage: parameters.plateImage,
-      tableImage: parameters.tableImage,
-      restaurantImage: parameters.restaurantImage,
-      cutleryImage: parameters.cutleryImage,
-      aspectRatio: parameters.aspectRatio,
-      imageSize: parameters.imageSize
-    }, { headers });
-    
-    if (response.data && response.data.success) {
-      return [response.data.image];
-    } else {
-      throw new Error(response.data.error || response.data.message || 'Error generando variantes gourmet');
-    }
-  } catch (error: any) {
-    console.error('Error generando variantes via backend:', error);
-    const errorData = error.response?.data;
-    const errorMessage = errorData?.error 
-      ? (typeof errorData.error === 'object' ? JSON.stringify(errorData.error) : errorData.error)
-      : (errorData?.message || error.message || 'Error al generar las variantes gourmet');
-    throw new Error(errorMessage);
-  }
-};
-
-/**
- * Genera imagen desde cero a través del backend
- */
-export const generateImageFromPrompt = async (
-  input: string, 
-  parameters: DishParameters,
-  apiKey?: string
-): Promise<string[]> => {
-  try {
-    const prompt = buildPrompt(parameters, input, true);
-    const url = `${API_BASE_URL}/api/generate-image`;
-    const headers: Record<string, string> = {};
-    if (apiKey) headers['x-gemini-key'] = apiKey;
-    
-    const response = await axios.post(url, { 
-      prompt,
-      aspectRatio: parameters.aspectRatio,
-      imageSize: parameters.imageSize
-    }, { headers });
-    
-    if (response.data && response.data.success) {
-      return [response.data.image];
-    } else {
-      throw new Error(response.data.error || response.data.message || 'Error generando imagen');
-    }
-  } catch (error: any) {
-    console.error('Error generando imagen desde cero via backend:', error);
-    const errorData = error.response?.data;
-    const errorMessage = errorData?.error 
-      ? (typeof errorData.error === 'object' ? JSON.stringify(errorData.error) : errorData.error)
-      : (errorData?.message || error.message || 'Error al generar la imagen');
-    throw new Error(errorMessage);
-  }
-};
-
-/**
- * Genera una receta usando la API de Gemini a través del backend
- * @param {string} input - Descripción o idea principal del plato
- * @param {DishParameters} parameters - TODOS los parámetros usados para generar la imagen
- * @param {string} ingredientsString - Ingredientes detectados o ingresados (opcional)
- * @param {string} apiKey - API Key de Gemini (opcional, enviada en headers)
- * @returns {Promise<string>} - Receta generada en formato Markdown
- */
-export const generateRecipe = async (
-  input: string, 
-  parameters: DishParameters, 
-  ingredientsString: string = '',
-  apiKey?: string
-): Promise<string> => {
-    try {
+/** Prompt de la receta que coincide con el plato generado */
+export const buildRecipePrompt = (input: string, parameters: DishParameters, ingredientsString: string = ''): string => {
         const {
             cuisineType,
             dishCategory,
@@ -490,23 +363,5 @@ Un tip práctico y breve relacionado con la técnica de cocción, los ingredient
 - Los ingredientes deben coincidir con los especificados
 
 Mantén un tono profesional, inspirador pero accesible. La receta debe ser clara y fácil de seguir para cualquier cocinero casero.`;
-
-        const url = `${API_BASE_URL}/api/generate-recipe`;
-        const headers: Record<string, string> = {};
-        if (apiKey) headers['x-gemini-key'] = apiKey;
-
-        const response = await axios.post(url, {
-            prompt: prompt
-        }, { headers });
-
-        if (response.data && response.data.success) {
-            return response.data.recipe;
-        } else {
-            throw new Error(response.data.error || 'Error desconocido al generar receta');
-        }
-
-    } catch (error: any) {
-        console.error("Error generando receta con Gemini:", error);
-        return "No se pudo generar la receta con Gemini. Verifica la conexión con el servidor o intenta más tarde.";
-    }
+  return prompt;
 };

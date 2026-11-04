@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Box, Tab, Tabs, Paper, Alert, AlertTitle, Link, alpha } from '@mui/material';
+import { Box, Tab, Tabs, Paper } from '@mui/material';
 import FromScratch from './FromScratch';
 import FromPhoto from './FromPhoto';
 import DishPreview from './DishPreview';
 import History from '../History';
 import useImageGeneration from '../../hooks/useImageGeneration';
-import { useApi } from '../../context/ApiContext';
 import { 
   INTENSIDAD_GOURMET_DEFAULT, 
   ESTILOS_PLATO, 
@@ -51,7 +50,6 @@ const TabPanel: React.FC<TabPanelProps> = (props) => {
 
 const DishModule: React.FC = () => {
   const [tabValue, setTabValue] = useState<number>(0);
-  const { isApiKeySet } = useApi();
   
   const [parameters, setParameters] = useState<DishParameters>({
     intensidadGourmet: INTENSIDAD_GOURMET_DEFAULT,
@@ -103,26 +101,6 @@ const DishModule: React.FC = () => {
 
   return (
     <Box>
-      {!isApiKeySet && (
-        <Alert 
-          severity="info" 
-          variant="outlined"
-          sx={{ 
-            mb: 4, 
-            borderRadius: '16px',
-            borderWidth: '2px',
-            bgcolor: (theme) => alpha(theme.palette.info.main, 0.05),
-            borderColor: (theme) => alpha(theme.palette.info.main, 0.2),
-            '& .MuiAlert-icon': { color: 'info.main' },
-            '& .MuiAlert-message': { width: '100%' }
-          }}
-        >
-          <AlertTitle sx={{ fontWeight: 800, color: 'info.main', fontSize: '1.1rem' }}>Paso 1: Configura tu acceso</AlertTitle>
-          Para comenzar a diseñar, ingresa tu <strong>API Key de Gemini</strong> en el campo superior derecho. 
-          Si no tienes una, obtenla gratis en <Link href="https://aistudio.google.com/" target="_blank" rel="noopener" sx={{ fontWeight: 700, color: 'info.main' }}>Google AI Studio</Link>.
-        </Alert>
-      )}
-
       {/* Sección de Parámetros */}
       <Paper elevation={0} sx={{ bgcolor: 'transparent', mb: 6 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>

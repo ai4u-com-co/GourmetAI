@@ -5,7 +5,7 @@ import Layout from './components/Layout';
 import LandingPage from './pages/LandingPage';
 import PlatformPage from './pages/PlatformPage';
 import { ThemeContextProvider } from './context/ThemeContext';
-import { ApiProvider } from './context/ApiContext';
+import { AuthProvider } from './context/AuthContext';
 
 const AppContent: React.FC = () => {
   return (
@@ -24,9 +24,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ThemeContextProvider>
-      <ApiProvider>
+      <AuthProvider>
         <AppContent />
-      </ApiProvider>
+      </AuthProvider>
     </ThemeContextProvider>
   );
 };

@@ -106,8 +106,7 @@ export const ASPECT_RATIOS: Option[] = [
 
 export const IMAGE_SIZES: Option[] = [
   { value: '1K', label: '1K (Estándar)' },
-  { value: '2K', label: '2K (Alta Calidad)' },
-  { value: '4K', label: '4K (Ultra HD)' }
+  { value: '2K', label: '2K (Alta resolución, el doble de créditos)' }
 ];
 
 export const NUMBER_OF_IMAGES = [
