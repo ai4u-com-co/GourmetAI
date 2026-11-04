@@ -216,21 +216,35 @@ test('generate-recipe: prompt vacío o gigante → 400; fallo de OpenAI → devu
   assert.equal(called('refund_credits').length, 1);
 });
 
-test('analyze-image: con acceso devuelve ingredientes y NO cobra', async () => {
+test('analyze-image: cobra 1 crédito ANTES de pedir el texto y devuelve los ingredientes', async () => {
   reset();
   const r = await POST(req('analyze-image', { image: PNG_1PX }));
   assert.equal(r.status, 200);
-  assert.equal((await r.json()).ingredients, 'harina, huevos');
-  assert.equal(called('consume_credits').length, 0);
+  const out = await r.json();
+  assert.equal(out.ingredients, 'harina, huevos');
+  assert.equal(out.charged, 1);
+  assert.ok(!JSON.stringify(out).includes(TOKEN_SECRETO));
+  assert.equal(rpcBody('consume_credits').p_amount, 1);
+  assert.equal(rpcBody('consume_credits').p_action, 'analyze');
+  const iConsume = world.calls.findIndex((c) => c.url.includes('consume_credits'));
+  const iOpenai = world.calls.findIndex((c) => c.url.includes('api.openai.com'));
+  assert.ok(iConsume > -1 && iConsume < iOpenai, 'el cobro debe ir antes de OpenAI');
 });
 
-test('analyze-image: sin membresía activa → 403 y no llama a OpenAI', async () => {
-  for (const membership of [null, { is_active: false }]) {
-    reset({ membership });
-    const r = await POST(req('analyze-image', { image: PNG_1PX }));
-    assert.equal(r.status, 403);
-    assert.equal(called('api.openai.com').length, 0);
-  }
+test('analyze-image: sin saldo → 402; sin acceso → 403; ninguno llama a OpenAI', async () => {
+  reset({ consume: { ok: false, remaining: 0 } });
+  assert.equal((await POST(req('analyze-image', { image: PNG_1PX }))).status, 402);
+  reset({ consumeError: { http: 403, body: { code: '42501', message: 'no access' } } });
+  assert.equal((await POST(req('analyze-image', { image: PNG_1PX }))).status, 403);
+  assert.equal(called('api.openai.com').length, 0);
+});
+
+test('analyze-image: si OpenAI falla devuelve el cobro', async () => {
+  reset({ chat: { status: 500, body: { error: { message: 'interno' } } } });
+  const r = await POST(req('analyze-image', { image: PNG_1PX }));
+  assert.equal(r.status, 502);
+  assert.equal(called('refund_credits').length, 1);
+  assert.match(await r.text(), /No se te cobró/);
 });
 
 test('analyze-image: imagen inválida → 400', async () => {

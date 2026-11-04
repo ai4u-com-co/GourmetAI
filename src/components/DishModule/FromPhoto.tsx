@@ -130,6 +130,7 @@ const FromPhoto: React.FC<FromPhotoProps> = ({ parameters, onParameterChange, on
           onParameterChange={onParameterChange}
           onGenerate={handleGenerate}
           isGenerating={isGenerating}
+          extraCredits={1}
         />
       </Box>
     </Box>

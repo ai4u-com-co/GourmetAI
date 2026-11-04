@@ -7,7 +7,7 @@ Software propio de Ai4U. Entra con Google; la IA es **GPT Image 2.5** (imágenes
 
 - **Login**: Google vía Supabase (PKCE) en el proyecto compartido **`apps`** (`dmracybffqdvcltkarag`), app `gourmetai`. El acceso lo decide la membresía en `core.app_memberships`; `open_signup` está apagado hasta lanzar la app.
 - **Créditos**: la clave de OpenAI es de Mariano, así que el control está en el servidor. `api/[action].ts` valida la sesión, cobra con `core.consume_credits` **antes** de llamar a OpenAI y devuelve el cobro (`core.refund_credits`) si falla. Los admin no pagan. El `refund_token` nunca llega al navegador.
-  - Imagen: Borrador 1 · Buena 4 · Máxima 15 créditos (×2 en 2K). Receta: 1 crédito. Análisis de ingredientes: sin costo (pero exige acceso).
+  - Imagen: Borrador 1 · Buena 4 · Máxima 15 créditos (×2 en 2K). Receta: 1 crédito. Detectar ingredientes de una foto: 1 crédito.
   - Saldo inicial al unirse: 10 créditos (`core.apps.default_credits`).
 - **Instalable**: `manifest.json` + `sw.js` + íconos. El service worker solo guarda la cáscara de la app; **nunca** `/api/*` ni Supabase.
 - **Historial**: en el navegador, **por cuenta** (`gourmet_ai_history_<user_id>`). El historial anterior (sin dueño) se ofrece importar a la primera cuenta que entre.

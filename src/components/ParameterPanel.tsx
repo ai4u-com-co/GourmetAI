@@ -41,6 +41,7 @@ interface ParameterPanelProps {
   onGenerate: () => void;
   isGenerating: boolean;
   hideHeaderControls?: boolean;
+  extraCredits?: number; // costo fijo adicional (p. ej. detectar ingredientes en el flujo de foto)
 }
 
 const ParameterPanel: React.FC<ParameterPanelProps> = ({ 
@@ -48,7 +49,8 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
   onParameterChange, 
   onGenerate, 
   isGenerating, 
-  hideHeaderControls = false 
+  hideHeaderControls = false,
+  extraCredits = 0
 }) => {
   const theme = useTheme();
   const {
@@ -351,7 +353,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
           },
         }}
       >
-        {isGenerating ? 'PROCESANDO...' : `GENERAR IMAGEN · ${imageCost(quality, imageSize)} ${imageCost(quality, imageSize) === 1 ? 'CRÉDITO' : 'CRÉDITOS'}`}
+        {isGenerating ? 'PROCESANDO...' : `GENERAR IMAGEN · ${imageCost(quality, imageSize) + extraCredits} ${imageCost(quality, imageSize) + extraCredits === 1 ? 'CRÉDITO' : 'CRÉDITOS'}`}
       </Button>
     </Paper>
   );

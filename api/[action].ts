@@ -26,9 +26,11 @@ const SIZES: Record<string, Record<string, string>> = {
   '1K': { '1:1': '1024x1024', '3:4': '960x1280', '4:3': '1280x960', '9:16': '864x1536', '16:9': '1536x864' },
   '2K': { '1:1': '2048x2048', '3:4': '1536x2048', '4:3': '2048x1536', '9:16': '1152x2048', '16:9': '2048x1152' },
 };
-// Créditos por imagen: calidad base × (2 en 2K). La receta cuesta 1; el análisis de ingredientes no cobra (pero exige acceso).
+// Créditos por imagen: calidad base × (2 en 2K). La receta y el análisis de ingredientes cuestan 1 cada uno: así
+// ninguna llamada a OpenAI queda sin medir (el tope por persona lo impone el saldo, atómico en la base).
 const BASE_CREDITS: Record<string, number> = { low: 1, medium: 4, high: 15 };
 const RECIPE_CREDITS = 1;
+const ANALYZE_CREDITS = 1;
 
 const MAX_PROMPT = 8000;
 const MAX_IMAGES = 5;
@@ -309,34 +311,26 @@ const handleAnalyzeImage = async (request: Request, openaiKey: string): Promise<
   const image = typeof body.image === 'string' ? body.image : '';
   if (image.length > MAX_IMAGE_CHARS || !DATA_URL.test(image)) return json(400, { error: 'bad_images', message: 'La foto no es válida o pesa demasiado.' });
 
-  // No cobra, pero solo responde a cuentas con acceso activo a la app (RLS filtra por la persona del JWT).
-  const { data: m, error: mErr } = await auth.sb.schema('core').from('app_memberships').select('is_active').eq('app_id', APP_ID).maybeSingle();
-  if (mErr) return json(500, { error: 'access_check_failed', message: 'No se pudo verificar tu acceso. Inténtalo de nuevo.' });
-  if (!m?.is_active) return json(403, { error: 'no_access', message: 'Tu cuenta no tiene acceso a esta app.' });
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
-  try {
-    const r = await callText(
-      openaiKey,
-      {
-        system: 'Identificas ingredientes en fotos de comida.',
-        user: 'Lista todos los ingredientes que identificas en esta imagen de comida. Responde solo con ingredientes separados por comas, sin explicaciones.',
-        image,
-        maxTokens: 200,
-      },
-      controller.signal,
-    );
-    if (!r.ok) {
-      const e = userError(r);
-      return json(e.http, { error: e.error, message: e.message });
-    }
-    return json(200, { ingredients: r.text });
-  } catch (err: any) {
-    return json(err?.name === 'AbortError' ? 504 : 502, { error: 'analyze_failed', message: 'No se pudo analizar la foto.' });
-  } finally {
-    clearTimeout(timer);
-  }
+  const charge = await chargeCredits(auth.sb, ANALYZE_CREDITS, 'analyze', {});
+  if (charge instanceof Response) return charge;
+  return runCharged(
+    auth.sb,
+    charge,
+    async (signal) => {
+      const r = await callText(
+        openaiKey,
+        {
+          system: 'Identificas ingredientes en fotos de comida.',
+          user: 'Lista todos los ingredientes que identificas en esta imagen de comida. Responde solo con ingredientes separados por comas, sin explicaciones.',
+          image,
+          maxTokens: 200,
+        },
+        signal,
+      );
+      return r.ok ? { ok: true, body: { ingredients: r.text } } : r;
+    },
+    ANALYZE_CREDITS,
+  );
 };
 
 export async function POST(request: Request): Promise<Response> {
