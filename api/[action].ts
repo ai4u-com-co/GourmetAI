@@ -12,8 +12,8 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { FALLBACK_MODEL, dataUrlDimensions, mimeFor, resolveImageOptions, usageForLog, wantsAdmin, type ResolvedImageOptions } from './_lib/openai-image-core.ts';
-import { openaiImageFields } from './_lib/openai-image-server.ts';
+import { FALLBACK_MODEL, dataUrlDimensions, mimeFor, resolveImageOptions, usageForLog, wantsAdmin, type ResolvedImageOptions } from './_lib/openai-image-core.js';
+import { openaiImageFields } from './_lib/openai-image-server.js';
 
 const SUPABASE_URL = 'https://dmracybffqdvcltkarag.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EP0yPI9NexntnxQ4_dG5jg_dH5z_zWU';

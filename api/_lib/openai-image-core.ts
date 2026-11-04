@@ -133,6 +133,9 @@ export function creditsFor(quality: ImageQualityKey, pixels: number, n: number, 
   return perImage * n + inputCredits(inputPixels);
 }
 
+/** Una imagen de entrada no puede pasar de ~1,5 MB (2.000.000 caracteres base64); el servidor ya lo impone, el lector también. */
+export const MAX_DIMENSION_SCAN_CHARS = 2_000_000;
+
 /**
  * Dimensiones de una imagen PNG, JPEG o WebP a partir de su data URL (o base64), SIN decodificarla y sin dependencias:
  * solo lee la cabecera. Devuelve null si no se reconoce el formato. Sirve en el navegador y en el servidor.
@@ -143,7 +146,8 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
   try {
     // Se lee TODA la imagen (el servidor ya limita cada una a ~1 MB de base64): un decodificador distinto no debe poder ver
     // algo que este lector no vio (segundo SOF, otra imagen incrustada, lienzo ≠ cuadro…).
-    const bin = atob(b64.slice(0, 2_000_000));
+    if (b64.length > MAX_DIMENSION_SCAN_CHARS) return null; // no se analiza a medias: o se ve entera o se rechaza
+    const bin = atob(b64);
     bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   } catch {
     return null;
@@ -162,6 +166,8 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
   // WebP: RIFF....WEBP. Simple (VP8 / VP8L) o extendido (VP8X). En VP8X el lienzo DEBE coincidir con el cuadro del primer
   // fragmento de imagen y no se aceptan animaciones (sumarían más píxeles de los que declara el lienzo).
   if (bytes.length >= 30 && ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP') {
+    const riffEnd = u32le(4) + 8;
+    if (riffEnd > bytes.length || riffEnd < 20) return null; // tamaño del contenedor incoherente con los bytes recibidos
     const frameDims = (o: number): { width: number; height: number } | null => {
       const kind = ascii(o, 4);
       if (kind === 'VP8L' && bytes[o + 8] === 0x2f) {
@@ -175,11 +181,12 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
     };
     const first = ascii(12, 4);
     if (first !== 'VP8X') return frameDims(12);
+    if (u32le(16) !== 10) return null; // el fragmento VP8X mide siempre 10 bytes
     if (bytes[20] & 0x02) return null; // bandera de animación
     const canvas = ok(1 + (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)), 1 + (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)));
     if (!canvas) return null;
-    let o = 12 + 8 + u32le(16) + (u32le(16) & 1); // después del fragmento VP8X (con relleno a par)
-    while (o + 8 <= bytes.length) {
+    let o = 12 + 8 + 10; // después del fragmento VP8X
+    while (o + 8 <= riffEnd) {
       const kind = ascii(o, 4);
       if (kind === 'ANMF' || kind === 'ANIM') return null;
       if (kind === 'VP8 ' || kind === 'VP8L') {
@@ -187,6 +194,7 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
         return f && f.width === canvas.width && f.height === canvas.height ? canvas : null;
       }
       const size = u32le(o + 4);
+      if (o + 8 + size > riffEnd) return null; // fragmento que se sale del contenedor
       o += 8 + size + (size & 1);
     }
     return null;
@@ -208,7 +216,8 @@ export function dataUrlDimensions(input: string): { width: number; height: numbe
       if (marker === 0xd9) return null; // EOI antes del primer SOS: no hay imagen
       if (marker === 0xda) {
         const len = (bytes[o + 2] << 8) | bytes[o + 3];
-        if (!found || len < 6) return null;
+        const ns = bytes[o + 4];
+        if (!found || !(ns >= 1 && ns <= 4) || len !== 6 + 2 * ns) return null; // la cabecera del SOS debe ser coherente
         sos = o + 2 + len;
         break;
       }
