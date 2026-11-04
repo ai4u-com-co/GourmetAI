@@ -10,6 +10,8 @@
 // Proyecto Supabase: `apps` (dmracybffqdvcltkarag), app `gourmetai`. La URL y la clave publishable son públicas por diseño;
 // la protección real son las políticas RLS y las funciones security definer de la base. No se usa service_role.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 
 const SUPABASE_URL = 'https://dmracybffqdvcltkarag.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EP0yPI9NexntnxQ4_dG5jg_dH5z_zWU';
@@ -48,6 +50,23 @@ const ROLE_TEXT: Record<(typeof ROLE_ORDER)[number], string> = {
   cutlery: 'the CUTLERY to use',
 };
 
+// ---------------------------------------------------------------- registro
+// Una línea JSON por evento, con el id de la solicitud (rid) para cruzar lo que ve la persona («ref. abc12345») con los logs
+// de Vercel. NUNCA se registran claves, JWT, tokens de devolución, prompts, imágenes ni el cuerpo de error de OpenAI:
+// solo códigos, estados, montos, tiempos y el id de OpenAI de la solicitud.
+interface Ctx {
+  rid: string;
+  action: string;
+  userId?: string;
+  t0: number;
+}
+const als = new AsyncLocalStorage<Ctx>();
+const log = (level: 'info' | 'warn' | 'error', event: string, data: Record<string, unknown> = {}) => {
+  const c = als.getStore();
+  const line = JSON.stringify({ app: 'gourmetai', level, event, rid: c?.rid, action: c?.action, user: c?.userId, ms: c ? Date.now() - c.t0 : undefined, ...data });
+  (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(line);
+};
+
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
@@ -57,7 +76,7 @@ const dataUrlToBlob = (dataUrl: string): Blob => {
   return new Blob([Buffer.from(b64, 'base64')], { type: mime });
 };
 
-type OpenAIImage = { ok: true; b64: string } | { ok: false; status: number; code?: string };
+type OpenAIImage = { ok: true; b64: string } | { ok: false; status: number; code?: string; oaiRequestId?: string };
 
 const errorCode = async (res: Response): Promise<string | undefined> => {
   try {
@@ -94,13 +113,13 @@ const callImage = async (
     p.images.forEach((img, i) => form.append('image[]', dataUrlToBlob(img), `input-${i + 1}`));
     res = await fetch(`${OPENAI}/images/edits`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal });
   }
-  if (!res.ok) return { ok: false, status: res.status, code: await errorCode(res) };
+  if (!res.ok) return { ok: false, status: res.status, code: await errorCode(res), oaiRequestId: res.headers.get('x-request-id') ?? undefined };
   const data = await res.json();
   const b64 = data?.data?.[0]?.b64_json;
   return b64 ? { ok: true, b64 } : { ok: false, status: 502, code: 'empty_response' };
 };
 
-type OpenAIText = { ok: true; text: string } | { ok: false; status: number; code?: string };
+type OpenAIText = { ok: true; text: string } | { ok: false; status: number; code?: string; oaiRequestId?: string };
 
 const callText = async (
   apiKey: string,
@@ -120,7 +139,7 @@ const callText = async (
     }),
     signal,
   });
-  if (!res.ok) return { ok: false, status: res.status, code: await errorCode(res) };
+  if (!res.ok) return { ok: false, status: res.status, code: await errorCode(res), oaiRequestId: res.headers.get('x-request-id') ?? undefined };
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
   return typeof text === 'string' && text.trim() ? { ok: true, text: text.trim() } : { ok: false, status: 502, code: 'empty_response' };
@@ -142,23 +161,35 @@ interface Session {
 const authenticate = async (request: Request): Promise<Session | Response> => {
   const authz = request.headers.get('authorization') ?? '';
   const jwt = authz.startsWith('Bearer ') ? authz.slice(7).trim() : '';
-  if (!jwt) return json(401, { error: 'unauthenticated', message: 'Inicia sesión para continuar.' });
+  if (!jwt) {
+    log('warn', 'auth_missing');
+    return json(401, { error: 'unauthenticated', message: 'Inicia sesión para continuar.' });
+  }
   const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
   const { data: who, error } = await sb.auth.getUser(jwt);
-  if (error || !who?.user) return json(401, { error: 'unauthenticated', message: 'Tu sesión venció. Vuelve a entrar.' });
+  if (error || !who?.user) {
+    log('warn', 'auth_invalid', { code: error?.status });
+    return json(401, { error: 'unauthenticated', message: 'Tu sesión venció. Vuelve a entrar.' });
+  }
+  const c = als.getStore();
+  if (c) c.userId = who.user.id;
   return { sb };
 };
 
 const readBody = async (request: Request): Promise<Record<string, any> | Response> => {
   const declared = Number(request.headers.get('content-length') ?? 0);
-  if (declared > MAX_BODY_BYTES) return json(413, { error: 'too_large', message: 'Las fotos son demasiado pesadas.' });
+  if (declared > MAX_BODY_BYTES) {
+    log('warn', 'body_too_large', { bytes: declared });
+    return json(413, { error: 'too_large', message: 'Las fotos son demasiado pesadas.' });
+  }
   try {
     const body = await request.json();
     return body && typeof body === 'object' ? body : json(400, { error: 'bad_request', message: 'Solicitud inválida.' });
   } catch {
+    log('warn', 'body_invalid_json');
     return json(400, { error: 'bad_request', message: 'Solicitud inválida.' });
   }
 };
@@ -170,13 +201,16 @@ const chargeCredits = async (sb: SupabaseClient, amount: number, action: string,
   if (!Number.isInteger(amount) || amount < 1) return json(500, { error: 'billing_error', message: 'No se pudo calcular el costo.' });
   const { data, error } = await sb.schema('core').rpc('consume_credits', { p_app: APP_ID, p_amount: amount, p_action: action, p_meta: meta });
   if (error) {
+    log(error.code === '42501' || error.code === '28000' ? 'warn' : 'error', 'charge_error', { code: error.code, amount, what: action });
     if (error.code === '42501') return json(403, { error: 'no_access', message: 'Tu cuenta no tiene acceso a esta app.' });
     if (error.code === '28000') return json(401, { error: 'unauthenticated', message: 'Tu sesión venció. Vuelve a entrar.' });
     return json(500, { error: 'billing_error', message: 'No se pudo verificar tu saldo. Inténtalo de nuevo.' });
   }
   if (!data?.ok) {
+    log('info', 'charge_insufficient', { amount, remaining: data?.remaining ?? 0, what: action });
     return json(402, { error: 'insufficient_credits', message: 'No te quedan créditos suficientes para esto.', remaining: data?.remaining ?? 0, needed: amount });
   }
+  log('info', 'charged', { amount, what: action, remaining: data.remaining, admin: !data.refund_token });
   return data as Charge;
 };
 
@@ -185,9 +219,13 @@ const settle = async (sb: SupabaseClient, charge: Charge): Promise<{ remaining: 
   if (!charge.refund_token) return { remaining: charge.remaining, refunded: true }; // admin: no hubo cobro
   try {
     const { data } = await sb.schema('core').rpc('refund_credits', { p_log_id: charge.log_id, p_token: charge.refund_token });
-    if (data?.ok) return { remaining: data.remaining, refunded: true };
-  } catch {
-    /* se informa abajo */
+    if (data?.ok) {
+      log('info', 'refunded', { remaining: data.remaining });
+      return { remaining: data.remaining, refunded: true };
+    }
+    log('error', 'refund_failed', { log_id: charge.log_id });
+  } catch (e: any) {
+    log('error', 'refund_failed', { log_id: charge.log_id, err: String(e?.message ?? e).slice(0, 120) });
   }
   return { remaining: charge.remaining, refunded: false };
 };
@@ -198,7 +236,7 @@ const noCharge = (base: string, refunded: boolean) =>
 const runCharged = async (
   sb: SupabaseClient,
   charge: Charge,
-  work: (signal: AbortSignal) => Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; status: number; code?: string }>,
+  work: (signal: AbortSignal) => Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; status: number; code?: string; oaiRequestId?: string }>,
   amount: number,
 ): Promise<Response> => {
   const controller = new AbortController();
@@ -206,14 +244,17 @@ const runCharged = async (
   try {
     const result = await work(controller.signal);
     if (!result.ok) {
+      log('error', 'openai_failed', { status: result.status, code: result.code, oai_rid: result.oaiRequestId });
       const s = await settle(sb, charge);
       const e = userError(result);
       return json(e.http, { error: e.error, message: noCharge(e.message, s.refunded), remaining: s.remaining });
     }
+    log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin' });
     return json(200, { ...result.body, remaining: charge.remaining, charged: charge.refund_token ? amount : 0 });
   } catch (err: any) {
-    const s = await settle(sb, charge);
     const aborted = err?.name === 'AbortError';
+    log('error', aborted ? 'openai_timeout' : 'work_threw', { err: String(err?.message ?? err).slice(0, 160) });
+    const s = await settle(sb, charge);
     return json(aborted ? 504 : 502, {
       error: aborted ? 'timeout' : 'generation_failed',
       message: noCharge(aborted ? 'La solicitud tardó demasiado; prueba una resolución menor.' : 'No se pudo completar la solicitud.', s.refunded),
@@ -241,6 +282,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
   const sizeTable = Object.hasOwn(SIZES, sizeKey) ? SIZES[sizeKey] : undefined;
   const size = sizeTable && Object.hasOwn(sizeTable, aspect) ? sizeTable[aspect] : undefined;
   if (!prompt || prompt.length > MAX_PROMPT || typeof size !== 'string' || !Object.hasOwn(BASE_CREDITS, quality) || !Array.isArray(rawImages) || rawImages.length > MAX_IMAGES) {
+    log('warn', 'bad_request', { quality, sizeKey, aspect, promptLen: prompt.length, images: Array.isArray(rawImages) ? rawImages.length : -1 });
     return json(400, { error: 'bad_request', message: 'Solicitud inválida.' });
   }
   // Cada imagen: { role, data }. Un rol solo puede aparecer una vez.
@@ -250,6 +292,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
     const role = typeof it?.role === 'string' ? it.role : '';
     const data = typeof it?.data === 'string' ? it.data : '';
     if (!(ROLE_ORDER as readonly string[]).includes(role) || seen.has(role) || data.length > MAX_IMAGE_CHARS || !DATA_URL.test(data)) {
+      log('warn', 'bad_images', { role });
       return json(400, { error: 'bad_images', message: 'Las fotos no son válidas o pesan demasiado.' });
     }
     seen.add(role);
@@ -333,10 +376,7 @@ const handleAnalyzeImage = async (request: Request, openaiKey: string): Promise<
   );
 };
 
-export async function POST(request: Request): Promise<Response> {
-  const openaiKey = process.env.OPENAI_API_KEY;
-  if (!openaiKey) return json(500, { error: 'server_misconfigured', message: 'El servicio no está configurado todavía.' });
-  const action = new URL(request.url).pathname.replace(/\/+$/, '').split('/').pop();
+const route = async (request: Request, action: string | undefined, openaiKey: string): Promise<Response> => {
   switch (action) {
     case 'generate-image':
       return handleGenerateImage(request, openaiKey);
@@ -347,4 +387,36 @@ export async function POST(request: Request): Promise<Response> {
     default:
       return json(404, { error: 'not_found', message: 'Ruta desconocida.' });
   }
+};
+
+/** Añade el id de la solicitud a la respuesta (cabecera y cuerpo JSON) para que la persona pueda citarlo. */
+const withRid = async (res: Response, rid: string): Promise<Response> => {
+  const headers = new Headers(res.headers);
+  headers.set('x-request-id', rid);
+  let text = await res.text();
+  try {
+    text = JSON.stringify({ ...JSON.parse(text), requestId: rid });
+  } catch {
+    /* no era JSON: se deja igual */
+  }
+  return new Response(text, { status: res.status, headers });
+};
+
+export async function POST(request: Request): Promise<Response> {
+  const action = new URL(request.url).pathname.replace(/\/+$/, '').split('/').pop();
+  const ctx: Ctx = { rid: randomUUID().slice(0, 8), action: action ?? '?', t0: Date.now() };
+  return als.run(ctx, async () => {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      log('error', 'server_misconfigured', { missing: 'OPENAI_API_KEY' });
+      return withRid(json(500, { error: 'server_misconfigured', message: 'El servicio no está configurado todavía.' }), ctx.rid);
+    }
+    try {
+      return await withRid(await route(request, action, openaiKey), ctx.rid);
+    } catch (err: any) {
+      // Red de seguridad: un fallo inesperado nunca llega como un crash sin formato.
+      log('error', 'unhandled', { err: String(err?.message ?? err).slice(0, 200), name: err?.name });
+      return withRid(json(500, { error: 'internal_error', message: 'Ocurrió un error inesperado en el servidor.' }), ctx.rid);
+    }
+  });
 }

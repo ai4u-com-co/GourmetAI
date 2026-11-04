@@ -6,6 +6,7 @@ import LandingPage from './pages/LandingPage';
 import PlatformPage from './pages/PlatformPage';
 import { ThemeContextProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const AppContent: React.FC = () => {
   return (
@@ -23,11 +24,13 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <ThemeContextProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ThemeContextProvider>
+    <ErrorBoundary>
+      <ThemeContextProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeContextProvider>
+    </ErrorBoundary>
   );
 };
 
