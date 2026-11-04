@@ -19,7 +19,9 @@ const APP_ID = 'gourmetai';
 
 const OPENAI = 'https://api.openai.com/v1';
 const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
-const IMAGE_FALLBACK_MODEL = 'gpt-image-2';
+const IMAGE_FALLBACK_MODEL = 'gpt-image-2'; // solo si 2.5 respondiera 404/model_not_found; el modelo usado queda en la respuesta y en el log
+const DEFAULT_QUALITY = 'low';
+const DEFAULT_IMAGE_SIZE = '1K';
 const TEXT_MODEL = 'gpt-4o-mini';
 const TIMEOUT_MS = 280_000;
 
@@ -259,7 +261,7 @@ const runCharged = async (
       const e = userError(result);
       return json(e.http, { error: e.error, message: noCharge(e.message, s.refunded), remaining: s.remaining });
     }
-    log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin' });
+    log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin', model: result.body.model });
     return json(200, { ...result.body, remaining: charge.remaining, charged: charge.refund_token ? amount : 0 });
   } catch (err: any) {
     const aborted = err?.name === 'AbortError';
@@ -285,8 +287,9 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
 
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   const aspect = String(body.aspectRatio ?? '');
-  const sizeKey = String(body.imageSize ?? '');
-  const quality = String(body.quality ?? '');
+  // Sin valor → la opción más económica (Borrador, 1K). Un valor inválido sí se rechaza.
+  const sizeKey = String(body.imageSize ?? DEFAULT_IMAGE_SIZE);
+  const quality = String(body.quality ?? DEFAULT_QUALITY);
   const rawImages: unknown = body.images ?? [];
   // Solo propiedades PROPIAS: con `in` o `obj[k]` entrarían claves heredadas ('constructor', '__proto__', 'toString'…).
   const sizeTable = Object.hasOwn(SIZES, sizeKey) ? SIZES[sizeKey] : undefined;

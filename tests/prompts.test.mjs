@@ -85,3 +85,9 @@ test('receta sin parámetros opcionales no deja líneas vacías', () => {
   assert.ok(!/^- [A-Za-zÁ-ú ]+: *$/m.test(p));
   assert.ok(!/Ingredientes base/.test(p));
 });
+
+test('constantes por defecto: calidad Borrador y tamaño 1K', async () => {
+  const c = await import('../src/constants/parameters.ts');
+  assert.equal(c.DEFAULT_QUALITY, 'low');
+  assert.equal(c.DEFAULT_IMAGE_SIZE, '1K');
+});

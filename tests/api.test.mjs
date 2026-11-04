@@ -360,3 +360,30 @@ test('generate-image: la numeración de imágenes explica el rol y prohíbe copi
   assert.match(p, /image 1 is the ORIGINAL DISH photo.*image 2 is the PLATE reference/s);
   assert.match(p, /never copy food from a reference image/);
 });
+
+// ---------------------------------------------------------------- valores por defecto: GPT Image 2.5 y la opción más económica
+test('sin calidad ni tamaño: usa Borrador y 1K (1 crédito) con gpt-image-2.5-sunburst', async () => {
+  reset();
+  const { prompt, aspectRatio } = good;
+  const r = await POST(req('generate-image', { prompt, aspectRatio, images: [] }));
+  assert.equal(r.status, 200);
+  const out = await r.json();
+  assert.equal(out.model, 'gpt-image-2.5-sunburst');
+  assert.equal(rpcBody('consume_credits').p_amount, 1);
+  const sent = JSON.parse(called('/images/generations')[0].init.body);
+  assert.equal(sent.model, 'gpt-image-2.5-sunburst');
+  assert.equal(sent.quality, 'low');
+  assert.equal(sent.size, '1024x1024');
+});
+
+test('un valor inválido sigue rechazándose (no se «corrige» a otro más caro ni más barato)', async () => {
+  reset();
+  assert.equal((await POST(req('generate-image', { ...good, quality: 'ultra' }))).status, 400);
+  assert.equal(called('rpc').length, 0);
+});
+
+test('el modelo usado queda en el log del éxito', async () => {
+  reset();
+  const { lines } = await captureLogs(() => POST(req('generate-image', good)));
+  assert.equal(appLogs(lines).find((l) => l.event === 'ok').model, 'gpt-image-2.5-sunburst');
+});

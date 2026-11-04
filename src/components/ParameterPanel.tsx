@@ -30,7 +30,9 @@ import {
   IMAGE_SIZES,
   INTENSIDAD_GOURMET_MIN,
   INTENSIDAD_GOURMET_MAX,
-  AMBIENTES
+  AMBIENTES,
+  DEFAULT_IMAGE_SIZE,
+  DEFAULT_QUALITY
 } from '../constants/parameters';
 import { generateRandomParameters, getDefaultParameters } from '../utils/randomParameters';
 import { DishParameters } from '../types';
@@ -212,7 +214,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
         <FormControl fullWidth size="small">
           <InputLabel>Tamaño</InputLabel>
           <Select
-            value={imageSize || '1K'}
+            value={imageSize || DEFAULT_IMAGE_SIZE}
             label="Tamaño"
             onChange={handleSelectChange('imageSize')}
             sx={{ borderRadius: 0 }}
@@ -225,7 +227,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
       <FormControl fullWidth size="small" sx={{ mb: 3 }}>
         <InputLabel>Calidad</InputLabel>
         <Select
-          value={quality || 'low'}
+          value={quality || DEFAULT_QUALITY}
           label="Calidad"
           onChange={handleSelectChange('quality')}
           sx={{ borderRadius: 0 }}

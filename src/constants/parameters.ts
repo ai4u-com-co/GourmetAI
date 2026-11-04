@@ -104,6 +104,11 @@ export const ASPECT_RATIOS: Option[] = [
   { value: '16:9', label: '16:9 (Panorámico)' }
 ];
 
+// Valores por defecto de la app: SIEMPRE la opción más económica (Borrador, 1K → 1 crédito) con GPT Image 2.5.
+// Subir calidad o tamaño es una decisión explícita de la persona; ningún flujo (aleatorio, reinicio, historial) lo hace solo.
+export const DEFAULT_QUALITY = 'low';
+export const DEFAULT_IMAGE_SIZE = '1K';
+
 export const IMAGE_SIZES: Option[] = [
   { value: '1K', label: '1K (Estándar)' },
   { value: '2K', label: '2K (Alta resolución, el doble de créditos)' }
