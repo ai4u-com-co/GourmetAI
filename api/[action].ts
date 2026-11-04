@@ -12,7 +12,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { FALLBACK_MODEL, dataUrlDimensions, mimeFor, resolveImageOptions, usageForLog, wantsAdmin, type ResolvedImageOptions } from './_lib/openai-image-core.js';
+import { FALLBACK_MODEL, creditsFromUsage, dataUrlDimensions, mimeFor, promptCostUnits, resolveImageOptions, usageForLog, wantsAdmin, type ResolvedImageOptions } from './_lib/openai-image-core.js';
 import { openaiImageFields } from './_lib/openai-image-server.js';
 
 const SUPABASE_URL = 'https://dmracybffqdvcltkarag.supabase.co';
@@ -280,6 +280,8 @@ type WorkOk = {
   body: Record<string, unknown>;
   /** Uso para core.record_usage (solo números y etiquetas cortas). */
   usage: Record<string, number | string>;
+  /** Uso CRUDO de OpenAI (solo imágenes): si está presente, se liquida contra lo cobrado al terminar. */
+  settleUsage?: { raw: unknown };
   /** Campos extra para el log de éxito (nunca prompts ni imágenes). */
   logExtra?: Record<string, unknown>;
 };
@@ -303,7 +305,33 @@ const runCharged = async (
     }
     await recordUsage(sb, charge, result.usage);
     log('info', 'ok', { what: charge.refund_token ? 'paid' : 'admin', model: result.body.model, credits: amount, tokens_in: result.usage.in, tokens_out: result.usage.out, ...result.logExtra });
-    return json(200, { ...result.body, remaining: charge.remaining, charged: charge.refund_token ? amount : 0 });
+    // Liquidación con el uso real (solo imágenes; los admin no pagan: sin refund_token no hubo cobro). El precio previo es una ESTIMACIÓN;
+    // si lo real la supera se cobra la diferencia del saldo del propio usuario (o lo que quede). Nunca devuelve de más ni rompe la imagen.
+    let remaining = charge.remaining;
+    let extra = 0;
+    if (charge.refund_token && result.settleUsage) {
+      const real = creditsFromUsage(result.settleUsage.raw);
+      const missing = real - amount;
+      if (missing > 0) {
+        try {
+          const ask = async (n: number) =>
+            (await sb.schema('core').rpc('consume_credits', { p_app: APP_ID, p_amount: n, p_action: 'image_topup', p_meta: { log_id: charge.log_id, charged: amount, real } })).data;
+          let asked = missing;
+          let top = await ask(asked);
+          if (!top?.ok && Number.isInteger(top?.remaining) && top.remaining >= 1 && top.remaining < missing) {
+            asked = top.remaining; // no alcanza para todo: cobra lo que quede
+            top = await ask(asked);
+          }
+          if (top?.ok) {
+            extra = asked;
+            remaining = Number.isInteger(top.remaining) ? top.remaining : remaining - asked;
+          }
+        } catch {
+          /* la imagen ya salió: no se rompe; el uso real queda en record_usage */
+        }
+      }
+    }
+    return json(200, { ...result.body, remaining, charged: charge.refund_token ? amount + extra : 0 });
   } catch (err: any) {
     const aborted = err?.name === 'AbortError';
     log('error', aborted ? 'openai_timeout' : 'work_threw', { err: String(err?.message ?? err).slice(0, 160) });
@@ -369,7 +397,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
     if (role === null) return json(500, { error: 'billing_error', message: 'No se pudo verificar tu rol. Inténtalo de nuevo.' });
     isAdmin = role;
   }
-  const resolved = resolveImageOptions(body, { inputImagePixels, isAdmin, promptChars: Buffer.byteLength(prompt) + 400 });
+  const resolved = resolveImageOptions(body, { inputImagePixels, isAdmin, promptChars: promptCostUnits(prompt) + 400 });
   if (!resolved.ok) {
     log('warn', 'bad_options', { code: resolved.code });
     if (resolved.code === 'forbidden_moderation') return json(403, { error: 'admin_only', message: resolved.message });
@@ -416,6 +444,7 @@ const handleGenerateImage = async (request: Request, openaiKey: string): Promise
           usage,
         },
         usage: usageForLog(result.usage, { model, quality: v.quality, size: v.size, n: v.n }),
+        settleUsage: { raw: result.usage },
         logExtra: { quality: v.quality, size: v.size, n: v.n, returned: out.length, format: v.format, background: v.background, inputs: images.length, oai_rid: result.oaiRequestId },
       };
     },
