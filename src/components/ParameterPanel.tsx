@@ -19,23 +19,21 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CasinoIcon from '@mui/icons-material/Casino';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import { QUALITIES, imageCost } from '../services/apiClient';
 import {
   ESTILOS_PLATO,
   ILUMINACIONES,
   FONDOS,
   DECORACIONES_EXTRA,
   ANGULOS_CAMARA,
-  ASPECT_RATIOS,
-  IMAGE_SIZES,
   INTENSIDAD_GOURMET_MIN,
   INTENSIDAD_GOURMET_MAX,
-  AMBIENTES,
-  DEFAULT_IMAGE_SIZE,
-  DEFAULT_QUALITY
+  AMBIENTES
 } from '../constants/parameters';
 import { generateRandomParameters, getDefaultParameters } from '../utils/randomParameters';
 import { DishParameters } from '../types';
+import AdvancedImageOptions from './AdvancedImageOptions';
+import { estimateImage } from '../services/imageOptions';
+import { useAuthContext } from '../context/AuthContext';
 
 interface ParameterPanelProps {
   parameters: DishParameters;
@@ -44,17 +42,20 @@ interface ParameterPanelProps {
   isGenerating: boolean;
   hideHeaderControls?: boolean;
   extraCredits?: number; // costo fijo adicional (p. ej. detectar ingredientes en el flujo de foto)
+  inputPixels?: number[]; // píxeles (ya reducidos) de cada foto que se enviará: se cobran como entrada
 }
 
-const ParameterPanel: React.FC<ParameterPanelProps> = ({ 
-  parameters, 
-  onParameterChange, 
-  onGenerate, 
-  isGenerating, 
+const ParameterPanel: React.FC<ParameterPanelProps> = ({
+  parameters,
+  onParameterChange,
+  onGenerate,
+  isGenerating,
   hideHeaderControls = false,
-  extraCredits = 0
+  extraCredits = 0,
+  inputPixels = []
 }) => {
   const theme = useTheme();
+  const { isAdmin, credits } = useAuthContext();
   const {
     intensidadGourmet,
     estiloPlato,
@@ -62,11 +63,12 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
     fondo,
     decoracionesExtra,
     anguloCamara,
-    ambiente,
-    aspectRatio,
-    imageSize,
-    quality
+    ambiente
   } = parameters;
+  // Mismo cálculo que el servidor: el costo que ves es el que se cobra (el servidor manda).
+  const estimate = estimateImage(parameters, inputPixels, isAdmin);
+  const total = estimate.ok ? estimate.value.credits + extraCredits : 0;
+  const lacksCredits = !isAdmin && estimate.ok && total > credits;
 
   const handleDecoracionChange = (value: string) => {
     const current = decoracionesExtra || [];
@@ -198,43 +200,13 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
         />
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <FormControl fullWidth size="small">
-          <InputLabel>Formato</InputLabel>
-          <Select
-            value={aspectRatio || '1:1'}
-            label="Formato"
-            onChange={handleSelectChange('aspectRatio')}
-            sx={{ borderRadius: 0 }}
-          >
-            {ASPECT_RATIOS.map((a) => <MenuItem key={a.value} value={a.value}>{a.label}</MenuItem>)}
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth size="small">
-          <InputLabel>Tamaño</InputLabel>
-          <Select
-            value={imageSize || DEFAULT_IMAGE_SIZE}
-            label="Tamaño"
-            onChange={handleSelectChange('imageSize')}
-            sx={{ borderRadius: 0 }}
-          >
-            {IMAGE_SIZES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
-          </Select>
-        </FormControl>
-      </Box>
-
-      <FormControl fullWidth size="small" sx={{ mb: 3 }}>
-        <InputLabel>Calidad</InputLabel>
-        <Select
-          value={quality || DEFAULT_QUALITY}
-          label="Calidad"
-          onChange={handleSelectChange('quality')}
-          sx={{ borderRadius: 0 }}
-        >
-          {QUALITIES.map((q) => <MenuItem key={q.value} value={q.value}>{q.label}</MenuItem>)}
-        </Select>
-      </FormControl>
+      <AdvancedImageOptions
+        parameters={parameters}
+        onParameterChange={onParameterChange}
+        isAdmin={isAdmin}
+        estimate={estimate}
+        disabled={isGenerating}
+      />
 
       <Accordion sx={accordionStyle}>
         <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={summaryStyle}>
@@ -334,15 +306,40 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
         </AccordionDetails>
       </Accordion>
 
+      <Box sx={{ mt: 4, p: 2, border: `1px solid ${theme.palette.divider}` }} data-testid="costo">
+        {estimate.ok ? (
+          <>
+            <Typography variant="body2" fontWeight={700}>
+              Costo: {total} {total === 1 ? 'crédito' : 'créditos'}
+              {isAdmin ? ' · sin límite para administradores' : ''}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+              {estimate.value.n > 1 ? `${estimate.value.n} propuestas` : '1 imagen'} de {estimate.value.size} px
+              {inputPixels.length ? ` · ${inputPixels.length} ${inputPixels.length === 1 ? 'foto enviada' : 'fotos enviadas'}` : ''}
+              {extraCredits ? ` · ${extraCredits} por detectar los ingredientes` : ''}
+              {isAdmin ? '' : ` · tu saldo: ${credits}`}
+            </Typography>
+            {lacksCredits && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                No te alcanzan los créditos para esta combinación: baja la calidad, el tamaño o las propuestas.
+              </Typography>
+            )}
+          </>
+        ) : (
+          <Typography variant="body2" color="error">Revisa las opciones avanzadas: {estimate.message}</Typography>
+        )}
+      </Box>
+
       <Button
         variant="contained"
         fullWidth
         size="large"
         onClick={onGenerate}
-        disabled={isGenerating}
-        sx={{ 
-          mt: 4, 
+        disabled={isGenerating || !estimate.ok || lacksCredits}
+        sx={{
+          mt: 2,
           py: 2,
+          minHeight: 48,
           borderRadius: 0,
           fontWeight: 700,
           letterSpacing: '0.1em',
@@ -355,7 +352,7 @@ const ParameterPanel: React.FC<ParameterPanelProps> = ({
           },
         }}
       >
-        {isGenerating ? 'PROCESANDO...' : `GENERAR IMAGEN · ${imageCost(quality, imageSize) + extraCredits} ${imageCost(quality, imageSize) + extraCredits === 1 ? 'CRÉDITO' : 'CRÉDITOS'}`}
+        {isGenerating ? 'PROCESANDO...' : estimate.ok ? `GENERAR IMAGEN · ${total} ${total === 1 ? 'CRÉDITO' : 'CRÉDITOS'}` : 'GENERAR IMAGEN'}
       </Button>
     </Paper>
   );

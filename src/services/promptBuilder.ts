@@ -17,8 +17,14 @@ const section = (title: string, lines: (string | false | undefined)[]): string =
 };
 
 const REALISM = [
-  '- Natural, unretouched food photography: real textures (crumb, sheen, moisture, char), small natural imperfections, appetizing and fresh.',
-  '- Not plastic, not over-smoothed, no heavy retouching or glamorization.',
+  '- Photorealistic editorial food photography for a restaurant: natural light, real textures (crumb, sheen of sauces, moisture, char, a little steam only if requested), small natural imperfections, appetizing and fresh.',
+  '- Not plastic, not over-smoothed, no artificial polish, no HDR look, no heavy retouching or glamorization.',
+];
+
+// Recorte para menús y pantallas: el plato aislado sobre fondo transparente (el parámetro `background: transparent` de la API va aparte).
+const CUTOUT = [
+  '- Isolate the plate (or bowl/board) and everything on it on a fully transparent background, with clean alpha edges and no halos or fringing.',
+  '- No table, no surface, no shadow, no checkerboard pattern, and no props or cutlery outside the plate.',
 ];
 
 const EXCLUDE = [
@@ -182,11 +188,12 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
     'citricos': 'citrus zest'
   };
 
+  // La intensidad cambia la PRESENTACIÓN (vajilla, mesa, luz, decoración), nunca la comida: el plato es sagrado.
   const intensidadText = intensidadGourmet <= 3
-    ? 'subtle improvement; keep the natural, home look'
+    ? 'subtle improvement of the presentation; keep the natural, home look'
     : intensidadGourmet <= 7
-    ? 'moderate transformation toward a gourmet presentation'
-    : 'strong transformation toward professional haute-cuisine presentation';
+    ? 'moderate transformation toward a gourmet presentation (plating style and setting, not the food itself)'
+    : 'strong transformation toward a professional haute-cuisine presentation (plating style and setting, not the food itself)';
 
   const decoracionesText = (decoracionesExtra || []).map(d => (d && decoracionesMap[d]) || d).filter(Boolean).join(', ');
   const propsText = (props || []).filter(p => p !== 'ninguno').map(p => (p && propsMap[p]) || p).filter(Boolean).join(', ');
@@ -201,21 +208,34 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
   const ambienteText = (ambiente ? ambienteMap[ambiente] : '') || '';
   const momentoText = (momentoDelDia ? momentoDelDiaMap[momentoDelDia] : '') || '';
   const saturacionText = saturacion ? (saturacionMap[saturacion] || '') : '';
+  const cutout = parameters.background === 'transparent';
 
-  const spec = (plateLine: string) => section('SPECIFICATIONS:', [
-    `- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}`,
-    `- Tableware: ${plateLine}`,
-    `- Surface/background: ${fondoCompleto}`,
-    `- Lighting: ${iluminacionCompleta}`,
-    `- Camera angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional food-photography angle'}`,
-    `- Depth of field: ${(profundidadCampo ? profundidadCampoMap[profundidadCampo] : '') || 'moderate depth of field'}`,
-    ambienteText && `- Atmosphere: ${ambienteText}`,
-    momentoText && `- Time of day: ${momentoText}`,
-    saturacionText && `- Colors: ${saturacionText}`,
-    propsText && `- Props: ${propsText}`,
-    decoracionesText && `- Garnish/decoration: ${decoracionesText}`,
-    efectosText && `- Effects: ${efectosText}`,
-  ]);
+  const spec = (plateLine: string, tableRef: boolean) => cutout
+    // Recorte: sin mesa, ambiente, props ni profundidad de campo del fondo (no hay fondo); queda el plato y su luz.
+    ? section('SPECIFICATIONS:', [
+        `- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}`,
+        `- Tableware: ${plateLine}`,
+        `- Lighting: ${iluminacionCompleta}`,
+        `- Camera angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional food-photography angle'}`,
+        saturacionText && `- Colors: ${saturacionText}`,
+        decoracionesText && `- Garnish/decoration: ${decoracionesText}`,
+        efectosText && `- Effects: ${efectosText}`,
+      ])
+    : section('SPECIFICATIONS:', [
+        `- Style: ${(estiloPlato ? estiloMap[estiloPlato] : '') || 'elegant'}`,
+        `- Tableware: ${plateLine}`,
+        `- Surface/background: ${tableRef ? 'the table shown in the TABLE reference image' : fondoCompleto}`,
+        `- Lighting: ${iluminacionCompleta}`,
+        `- Camera angle: ${(anguloCamara ? anguloMap[anguloCamara] : '') || 'professional food-photography angle'}`,
+        `- Depth of field: ${(profundidadCampo ? profundidadCampoMap[profundidadCampo] : '') || 'moderate depth of field'}`,
+        ambienteText && `- Atmosphere: ${ambienteText}`,
+        momentoText && `- Time of day: ${momentoText}`,
+        saturacionText && `- Colors: ${saturacionText}`,
+        propsText && `- Props: ${propsText}`,
+        decoracionesText && `- Garnish/decoration: ${decoracionesText}`,
+        efectosText && `- Effects: ${efectosText}`,
+      ]);
+  const cutoutSection = cutout ? section('BACKGROUND (cutout for menus and screens):', CUTOUT) : '';
 
   if (isFromScratch) {
     const culinary = section('DISH DETAILS (use them to make the dish authentic):', [
@@ -225,9 +245,10 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
       culinaryTags?.length ? `- Features: ${list(culinaryTags)}` : '',
     ]);
     return [
-      `TASK: Photorealistic professional food photograph of this dish: "${input}".`,
+      `TASK: Photorealistic editorial food photograph of this dish, for a restaurant menu and social media: "${input}".`,
       culinary,
-      spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText),
+      spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText, false),
+      cutoutSection,
       section('REALISM:', REALISM),
       section('EXCLUDE:', EXCLUDE),
     ].filter(Boolean).join('\n\n');
@@ -239,20 +260,30 @@ export const buildPrompt = (parameters: DishParameters, input: string, isFromScr
     parameters.restaurantImage && '- RESTAURANT reference: take its atmosphere, light and decor as inspiration for the environment.',
     parameters.cutleryImage && '- CUTLERY reference: use the same style and design for any cutlery shown.',
   ]);
+  // Con recorte no hay mesa ni ambiente: esas referencias no se usan.
+  const refsFinal = cutout
+    ? section('REFERENCES (use them only for what is stated; never copy food from them):', [
+        parameters.plateImage && '- PLATE reference: use exactly this plate (shape, material, color) for the final presentation.',
+        parameters.cutleryImage && '- CUTLERY reference: only if cutlery sits on the plate, use this style.',
+      ])
+    : refs;
 
   return [
-    'TASK: Professional food-photography re-styling of the provided dish photo (the ORIGINAL DISH image). Photorealistic result.',
+    'TASK: Professional food-photography re-styling of the provided dish photo (the ORIGINAL DISH image), for a restaurant menu and social media. Photorealistic editorial result.',
     section('CHANGE (only this):', [
       '- Photographic execution: lighting, sharpness, white balance, depth of field and camera angle, as specified below.',
-      '- Presentation: plate, surface, props and the garnish listed below — nothing else.',
+      cutout
+        ? '- Presentation: plate and the garnish listed below, isolated as described in BACKGROUND — nothing else.'
+        : '- Presentation: plate, surface, props and the garnish listed below — nothing else.',
       `- Degree of change: ${intensidadText}.`,
     ]),
     section('PRESERVE (must stay the same as the original photo):', [
-      `- The food itself: the same dish and ingredients${input ? ` (${input})` : ''}, the same components, portions and arrangement, the same colors and natural textures.`,
+      `- Do not change the food: same ingredients${input ? ` (${input})` : ''}, same quantities, same arrangement, same components and portions, same colors and natural textures.`,
       '- Do not add, remove, replace or invent any food or ingredient.',
     ]),
-    refs,
-    spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText),
+    refsFinal,
+    spec(parameters.plateImage ? 'the plate shown in the PLATE reference image' : vajillaText, !!parameters.tableImage),
+    cutoutSection,
     section('REALISM:', REALISM),
     section('EXCLUDE:', EXCLUDE),
   ].filter(Boolean).join('\n\n');
@@ -309,6 +340,7 @@ ${contexto}
 CÓMO USAR EL CONTEXTO:
 - Los ingredientes base pueden venir de una detección automática y estar incompletos o equivocados: úsalos como punto de partida, completa lo necesario para que el plato funcione y marca con "(opcional)" lo que no sea seguro.
 - Respeta la cocina, la categoría y la técnica indicadas; si hay varias, intégralas con coherencia.
+- No cambies el plato: es el que se describe arriba. Si no hay ingredientes base, usa la versión clásica del plato nombrado; no inventes marcas ni datos nutricionales.
 - Cantidades en unidades métricas (g, ml, cucharadas, tazas) y precisas; para cocineros caseros.
 
 FORMATO (Markdown, exactamente estas secciones y en este orden):

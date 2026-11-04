@@ -97,11 +97,13 @@ export const PROFUNDIDADES_CAMPO: Option[] = [
 ];
 
 export const ASPECT_RATIOS: Option[] = [
-  { value: '1:1', label: '1:1 (Cuadrado)' },
-  { value: '3:4', label: '3:4 (Retrato)' },
-  { value: '4:3', label: '4:3 (Estándar)' },
-  { value: '9:16', label: '9:16 (Vertical)' },
-  { value: '16:9', label: '16:9 (Panorámico)' }
+  { value: '1:1', label: '1:1 · Cuadrado (Instagram, menú)' },
+  { value: '4:5', label: '4:5 · Retrato (feed de Instagram)' },
+  { value: '3:4', label: '3:4 · Retrato' },
+  { value: '4:3', label: '4:3 · Estándar' },
+  { value: '3:2', label: '3:2 · Foto clásica' },
+  { value: '9:16', label: '9:16 · Vertical (stories, reels)' },
+  { value: '16:9', label: '16:9 · Panorámico (pantallas del restaurante)' }
 ];
 
 // Valores por defecto de la app: SIEMPRE la opción más económica (Borrador, 1K → 1 crédito) con GPT Image 2.5.
@@ -111,7 +113,7 @@ export const DEFAULT_IMAGE_SIZE = '1K';
 
 export const IMAGE_SIZES: Option[] = [
   { value: '1K', label: '1K (Estándar)' },
-  { value: '2K', label: '2K (Alta resolución, el doble de créditos)' }
+  { value: '2K', label: '2K (Alta resolución)' }
 ];
 
 export const NUMBER_OF_IMAGES = [

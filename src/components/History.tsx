@@ -147,8 +147,11 @@ const History: React.FC = () => {
                   <img 
                     src={selectedItem.generatedImages[0]} 
                     alt="Generada" 
-                    style={{ width: '100%', borderRadius: '8px' }} 
+                    style={{ width: '100%', borderRadius: '8px' }}
                   />
+                  {selectedItem.generatedImages.slice(1).map((src, i) => (
+                    <img key={i} src={src} alt={`Propuesta ${i + 2}`} style={{ width: '100%', borderRadius: '8px', marginTop: 8 }} />
+                  ))}
                   {selectedItem.originalImage && (
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="subtitle2" gutterBottom>Imagen Original</Typography>

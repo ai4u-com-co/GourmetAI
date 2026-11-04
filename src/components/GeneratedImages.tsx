@@ -19,6 +19,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import { downloadImage } from '../utils/imageUtils';
 import { downloadImageWithMetadata, createMetadata } from '../utils/metadataUtils';
 import { DishParameters } from '../types';
+import { extensionOf } from '../services/imageOptions';
 
 interface LoadingMessage {
   text: string;
@@ -50,7 +51,13 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
   const [loadingMessageIndex, setLoadingMessageIndex] = useState<number>(0);
   const [progress, setProgress] = useState<number>(0);
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [variantIndex, setVariantIndex] = useState<number>(0);
   const theme = useTheme();
+
+  // Una generación nueva vuelve a mostrar la primera propuesta.
+  useEffect(() => {
+    setVariantIndex(0);
+  }, [images]);
 
   const calculateProgress = (elapsedSeconds: number): number => {
     const totalEstimatedSeconds = 120;
@@ -110,17 +117,18 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
 
   const handleDownload = async (imageUrl: string, index: number = 0) => {
     const filename = `gourmet_variante_${index + 1}`;
-    
+    const ext = extensionOf(imageUrl); // jpg, webp o png según lo que devolvió el servidor
+
     if (parameters && seed && ingredients) {
       try {
         const metadata = createMetadata(parameters, seed, ingredients);
-        await downloadImageWithMetadata(imageUrl, metadata, filename);
+        await downloadImageWithMetadata(imageUrl, metadata, filename, ext);
       } catch (error) {
         console.error('Error downloading with metadata, using simple download:', error);
-        await downloadImage(imageUrl, `${filename}.png`);
+        await downloadImage(imageUrl, `${filename}.${ext}`);
       }
     } else {
-      await downloadImage(imageUrl, `${filename}.png`);
+      await downloadImage(imageUrl, `${filename}.${ext}`);
     }
   };
 
@@ -252,7 +260,18 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
     );
   }
 
-  const imageUrl = images[0];
+  const safeIndex = Math.min(variantIndex, images.length - 1);
+  const imageUrl = images[safeIndex];
+  // Fondo transparente (recorte): se muestra sobre un tablero para que se vea que es transparente.
+  const isCutout = parameters?.background === 'transparent';
+  const checker = isCutout
+    ? {
+        backgroundColor: theme.palette.background.paper,
+        backgroundImage: `linear-gradient(45deg, ${alpha(theme.palette.text.primary, 0.08)} 25%, transparent 25%, transparent 75%, ${alpha(theme.palette.text.primary, 0.08)} 75%), linear-gradient(45deg, ${alpha(theme.palette.text.primary, 0.08)} 25%, transparent 25%, transparent 75%, ${alpha(theme.palette.text.primary, 0.08)} 75%)`,
+        backgroundSize: '24px 24px',
+        backgroundPosition: '0 0, 12px 12px',
+      }
+    : {};
 
   return (
     <Fade in={true} timeout={800}>
@@ -277,8 +296,9 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
           </Typography>
           <Button
             startIcon={<DownloadIcon />}
-            onClick={() => handleDownload(imageUrl, 0)}
-            sx={{ 
+            onClick={() => handleDownload(imageUrl, safeIndex)}
+            sx={{
+              minHeight: 44,
               borderRadius: 0,
               textTransform: 'uppercase',
               letterSpacing: '0.1em',
@@ -303,6 +323,7 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
             display: 'block',
             transition: 'all 0.3s ease',
             '&:hover .overlay': { opacity: 1 },
+            ...checker,
           }}
           onClick={() => handleImageClick(imageUrl)}
         >
@@ -337,6 +358,37 @@ const GeneratedImages: React.FC<GeneratedImagesProps> = ({ images, isLoading, er
             </Typography>
           </Box>
         </Paper>
+
+        {images.length > 1 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Propuesta {safeIndex + 1} de {images.length}. Elige la que prefieras y descárgala.
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(images.length, 4)}, minmax(0, 1fr))`, gap: 1 }}>
+              {images.map((src, i) => (
+                <Box
+                  key={i}
+                  component="button"
+                  type="button"
+                  aria-label={`Ver propuesta ${i + 1}`}
+                  aria-pressed={i === safeIndex}
+                  onClick={() => setVariantIndex(i)}
+                  sx={{
+                    p: 0,
+                    minHeight: 44,
+                    cursor: 'pointer',
+                    bgcolor: 'background.paper',
+                    border: `2px solid ${i === safeIndex ? theme.palette.text.primary : theme.palette.divider}`,
+                    overflow: 'hidden',
+                    ...checker,
+                  }}
+                >
+                  <img src={src} alt={`Propuesta ${i + 1}`} style={{ width: '100%', height: '100%', maxHeight: 120, objectFit: 'cover', display: 'block' }} />
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
 
         <Dialog
           open={openDialog}

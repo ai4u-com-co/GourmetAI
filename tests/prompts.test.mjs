@@ -55,7 +55,7 @@ test('el nivel de transformación cambia con la intensidad', () => {
 
 test('desde cero: tarea, detalles culinarios, realismo y exclusiones; sin CAMBIA/CONSERVA', () => {
   const p = buildPrompt(full, 'Concepto: lasaña. Ingredientes: pasta', true);
-  assert.match(p, /TASK: Photorealistic professional food photograph of this dish: "Concepto: lasaña/);
+  assert.match(p, /TASK: Photorealistic editorial food photograph of this dish, for a restaurant menu and social media: "Concepto: lasaña/);
   assert.match(p, /Cuisine: italiana, mediterránea/);
   assert.match(p, /Technique: horno/);
   assert.ok(!/PRESERVE|CHANGE \(only/.test(p));

@@ -90,7 +90,7 @@ export const validateParameters = (parameters: DishParameters): ValidationResult
     ambiente: ['sin-preferencia', 'restaurante', 'cocina-casera', 'terraza', 'buffet', 'estudio'],
     momentoDelDia: ['sin-preferencia', 'desayuno', 'brunch', 'almuerzo', 'cena'],
     profundidadCampo: ['moderado', 'bokeh-fuerte', 'todo-foco'],
-    aspectRatio: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    aspectRatio: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
     efectoVapor: ['sin-vapor', 'sutil', 'intenso'],
     efectoFrescura: ['sin-efecto', 'gotas', 'escarcha']
   };
