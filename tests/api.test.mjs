@@ -254,3 +254,80 @@ test('analyze-image: imagen inválida → 400', async () => {
     assert.equal(called('api.openai.com').length, 0);
   }
 });
+
+// ---------------------------------------------------------------- registro y referencia de error
+const captureLogs = async (fn) => {
+  const lines = [];
+  const orig = { log: console.log, warn: console.warn, error: console.error };
+  for (const k of ['log', 'warn', 'error']) console[k] = (...a) => lines.push(a.join(' '));
+  try {
+    return { result: await fn(), lines };
+  } finally {
+    Object.assign(console, orig);
+  }
+};
+const appLogs = (lines) => lines.filter((l) => l.startsWith('{"app":"gourmetai"')).map((l) => JSON.parse(l));
+
+test('toda respuesta lleva requestId (cuerpo y cabecera x-request-id), también los errores', async () => {
+  for (const [action, body, headers] of [
+    ['generate-image', good, { authorization: 'Bearer jwt-ok' }],
+    ['generate-image', good, {}],
+    ['otra-cosa', good, {}],
+    ['generate-image', { ...good, quality: 'ultra' }, { authorization: 'Bearer jwt-ok' }],
+  ]) {
+    reset();
+    const r = await POST(req(action, body, headers));
+    const out = await r.json();
+    assert.match(out.requestId, /^[0-9a-f]{8}$/);
+    assert.equal(r.headers.get('x-request-id'), out.requestId);
+  }
+});
+
+test('sin OPENAI_API_KEY responde JSON claro con requestId y lo registra como error', async () => {
+  reset();
+  const k = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  const { result: r, lines } = await captureLogs(() => POST(req('generate-image', good)));
+  process.env.OPENAI_API_KEY = k;
+  assert.equal(r.status, 500);
+  const out = await r.json();
+  assert.equal(out.error, 'server_misconfigured');
+  assert.ok(appLogs(lines).some((l) => l.level === 'error' && l.event === 'server_misconfigured' && l.rid === out.requestId));
+});
+
+test('fallo de OpenAI: el log trae estado, código, id de OpenAI y rid, y NO trae secretos, prompts ni tokens', async () => {
+  reset({ openai: [{ status: 500, body: { error: { message: 'detalle interno sk-secreto-del-cuerpo', code: 'server_error' } } }] });
+  const { result: r, lines } = await captureLogs(() => POST(req('generate-image', { ...good, prompt: 'PROMPT-PRIVADO-123' })));
+  assert.equal(r.status, 502);
+  const out = await r.json();
+  const logs = appLogs(lines);
+  const failed = logs.find((l) => l.event === 'openai_failed');
+  assert.ok(failed, 'debe registrar openai_failed');
+  assert.equal(failed.status, 500);
+  assert.equal(failed.code, 'server_error');
+  assert.equal(failed.rid, out.requestId);
+  assert.equal(failed.action, 'generate-image');
+  assert.equal(failed.user, 'u1');
+  assert.ok(logs.some((l) => l.event === 'charged' && l.amount === 1));
+  assert.ok(logs.some((l) => l.event === 'refunded'));
+  const all = lines.join('\n');
+  for (const secreto of ['sk-prueba-no-real', 'sk-secreto-del-cuerpo', TOKEN_SECRETO, 'jwt-ok', 'PROMPT-PRIVADO-123', 'a@b.co']) {
+    assert.ok(!all.includes(secreto), `el log no debe contener: ${secreto}`);
+  }
+});
+
+test('si no se pudo devolver el cobro se registra como error (para atenderlo a mano)', async () => {
+  reset({ openai: [{ status: 500, body: {} }], refund: { ok: false } });
+  const { result: r, lines } = await captureLogs(() => POST(req('generate-image', good)));
+  assert.equal(r.status, 502);
+  assert.match((await r.json()).message, /escríbenos/);
+  assert.ok(appLogs(lines).some((l) => l.level === 'error' && l.event === 'refund_failed'));
+});
+
+test('éxito: se registra ok con duración y sin la imagen', async () => {
+  reset();
+  const { lines } = await captureLogs(() => POST(req('generate-image', good)));
+  const ok = appLogs(lines).find((l) => l.event === 'ok');
+  assert.ok(ok && typeof ok.ms === 'number');
+  assert.ok(!lines.join('\n').includes('QUJD'));
+});

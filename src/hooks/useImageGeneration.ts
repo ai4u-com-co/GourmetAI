@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { analyzeImage, generateGourmetVariants, generateImageFromPrompt, generateRecipe } from '../services/apiClient';
+import { analyzeImage, generateGourmetVariants, generateImageFromPrompt, generateRecipe, describeError } from '../services/apiClient';
 import { saveToHistory } from '../utils/historyService';
 import { DishParameters } from '../types';
 
@@ -54,7 +54,7 @@ const useImageGeneration = () => {
 
       return { variants, ingredients: detectedIngredients, seed };
     } catch (err: any) {
-      const errorMessage = err.message || 'Error al generar las imágenes gourmet';
+      const errorMessage = describeError(err, 'Error al generar las imágenes gourmet');
       setError(errorMessage);
       throw err;
     } finally {
@@ -122,7 +122,7 @@ const useImageGeneration = () => {
 
       return { variants, seed };
     } catch (err: any) {
-      const errorMessage = err.message || 'Error al generar la imagen desde cero';
+      const errorMessage = describeError(err, 'Error al generar la imagen desde cero');
       setError(errorMessage);
       throw err;
     } finally {
@@ -174,7 +174,7 @@ const useImageGeneration = () => {
         }
       } catch (err: any) {
           console.error("❌ Error fetching recipe:", err);
-          setError("No se pudo generar la receta: " + (err.message || 'Error desconocido'));
+          setError('No se pudo generar la receta: ' + describeError(err, 'Error desconocido'));
           setRecipe(null);
       } finally {
           setIsRecipeGenerating(false);
