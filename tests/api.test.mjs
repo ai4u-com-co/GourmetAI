@@ -112,19 +112,19 @@ test('generate-image: cobra ANTES de llamar a OpenAI, con el monto correcto, y n
   assert.equal(r.status, 200);
   const out = await r.json();
   assert.match(out.image, /^data:image\/jpeg;base64,QUJD$/);
-  assert.equal(out.charged, 1);
+  assert.equal(out.charged, 2);
   assert.equal(out.remaining, 9);
   assert.ok(!JSON.stringify(out).includes(TOKEN_SECRETO));
   const iConsume = world.calls.findIndex((c) => c.url.includes('consume_credits'));
   const iOpenai = world.calls.findIndex((c) => c.url.includes('api.openai.com'));
   assert.ok(iConsume > -1 && iConsume < iOpenai, 'el cobro debe ir antes de OpenAI');
   assert.equal(rpcBody('consume_credits').p_app, 'gourmetai');
-  assert.equal(rpcBody('consume_credits').p_amount, 1);
+  assert.equal(rpcBody('consume_credits').p_amount, 2);
   assert.equal(called('refund_credits').length, 0);
 });
 
-test('generate-image: el costo depende de la calidad y del tamaño (medium 2K = 6, high 1K = 9, por el núcleo)', async () => {
-  for (const [quality, imageSize, amount] of [['medium', '2K', 6], ['high', '1K', 9], ['low', '2K', 3]]) {
+test('generate-image: el costo depende de la calidad y del tamaño (medium 2K = 6, high 1K = 12, por el núcleo)', async () => {
+  for (const [quality, imageSize, amount] of [['medium', '2K', 6], ['high', '1K', 12], ['low', '2K', 3]]) {
     reset();
     await POST(req('generate-image', { ...good, quality, imageSize }));
     assert.equal(rpcBody('consume_credits').p_amount, amount);
@@ -310,7 +310,7 @@ test('fallo de OpenAI: el log trae estado, código, id de OpenAI y rid, y NO tra
   assert.equal(failed.rid, out.requestId);
   assert.equal(failed.action, 'generate-image');
   assert.equal(failed.user, 'u1');
-  assert.ok(logs.some((l) => l.event === 'charged' && l.amount === 1));
+  assert.ok(logs.some((l) => l.event === 'charged' && l.amount === 2));
   assert.ok(logs.some((l) => l.event === 'refunded'));
   const all = lines.join('\n');
   for (const secreto of ['sk-prueba-no-real', 'sk-secreto-del-cuerpo', TOKEN_SECRETO, 'jwt-ok', 'PROMPT-PRIVADO-123', 'a@b.co']) {
@@ -364,14 +364,14 @@ test('generate-image: la numeración de imágenes explica el rol y prohíbe copi
 });
 
 // ---------------------------------------------------------------- valores por defecto: GPT Image 2.5 y la opción más económica
-test('sin calidad ni tamaño: usa Borrador y 1K (1 crédito) con gpt-image-2.5-sunburst', async () => {
+test('sin calidad ni tamaño: usa Borrador y 1K (2 créditos: 195 tokens de salida + el texto) con gpt-image-2.5-sunburst', async () => {
   reset();
   const { prompt, aspectRatio } = good;
   const r = await POST(req('generate-image', { prompt, aspectRatio, images: [] }));
   assert.equal(r.status, 200);
   const out = await r.json();
   assert.equal(out.model, 'gpt-image-2.5-sunburst');
-  assert.equal(rpcBody('consume_credits').p_amount, 1);
+  assert.equal(rpcBody('consume_credits').p_amount, 2);
   const sent = JSON.parse(called('/images/generations')[0].init.body);
   assert.equal(sent.model, 'gpt-image-2.5-sunburst');
   assert.equal(sent.quality, 'low');

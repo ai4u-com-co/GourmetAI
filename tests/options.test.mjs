@@ -12,10 +12,10 @@ const base = {
   aspectRatio: '1:1', efectoVapor: 'sin-vapor', efectoFrescura: 'sin-efecto', props: ['copa'], tableImage: 'x', restaurantImage: 'x', plateImage: 'x',
 };
 
-test('sin opciones: lo más económico (sunburst, low, 1K, jpeg, auto, 1) y costo 1', () => {
+test('sin opciones: lo más económico (sunburst, low, 1K, jpeg, auto, 1) y costo 2', () => {
   const o = opt.imageRequestOptions({ ...base });
   assert.deepEqual([o.model, o.quality, o.imageSize, o.format, o.background, o.n], ['sunburst', 'low', '1K', 'jpeg', 'auto', 1]);
-  assert.equal(opt.estimateImage(base, [], false).value.credits, 1);
+  assert.equal(opt.estimateImage(base, [], false).value.credits, 2);
   assert.ok(opt.isCheapest(base));
 });
 
@@ -27,7 +27,7 @@ test('valores viejos o inexistentes (historial antiguo) se normalizan a los defa
 test('el costo coincide con el núcleo y suma las fotos de entrada por píxeles', () => {
   const e = opt.estimateImage({ ...base, quality: 'high', numberOfImages: 2 }, [1280 * 960], false);
   assert.ok(e.ok);
-  assert.equal(e.value.credits, core.resolveImageOptions({ quality: 'high', n: 2 }, { inputImagePixels: [1280 * 960] }).value.credits);
+  assert.equal(e.value.credits, core.resolveImageOptions({ quality: 'high', n: 2 }, { estimate: true, inputImagePixels: [1280 * 960] }).value.credits);
   assert.ok(e.value.credits > opt.estimateImage({ ...base, quality: 'high', numberOfImages: 2 }, [], false).value.credits);
 });
 

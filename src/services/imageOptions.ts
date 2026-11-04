@@ -86,7 +86,7 @@ export const inputPixelsOf = (dataUrl: string | null | undefined, maxWidth = 128
 
 /** Costo y validación de la solicitud, con el mismo cálculo del servidor. `inputPixels`: una entrada por foto que se enviará. */
 export const estimateImage = (p: DishParameters, inputPixels: number[], isAdmin: boolean): Resolved =>
-  resolveImageOptions(imageRequestOptions(p), { inputImagePixels: inputPixels.filter((x) => x > 0), isAdmin });
+  resolveImageOptions(imageRequestOptions(p), { inputImagePixels: inputPixels.filter((x) => x > 0), isAdmin, estimate: true });
 
 /** Un resumen corto de las opciones elegidas, para la cabecera del panel. */
 export const summarize = (p: DishParameters): string => {
